@@ -20,6 +20,7 @@ import { ApproveModal, RejectModal, ReassignModal } from './screens/admin/modals
 import { approveTicket, rejectTicket, reassignTicket, generateLink } from './lib/actions';
 import WikiListAdmin from './screens/admin/WikiList';
 import WikiEditor from './screens/admin/WikiEditor';
+import Inventory from './screens/admin/Inventory';
 import TechDashboard from './screens/mobile/MobileDashboard';
 import TechTicketDetail from './screens/mobile/MobileTicket';
 import { TechWikiList, TechWikiPage } from './screens/mobile/MobileWiki';
@@ -60,6 +61,7 @@ function AuthedApp() {
       addTechnician: data.addTechnician,
       updateTechnician: data.updateTechnician,
       resetTechnicianPassword: data.resetTechnicianPassword,
+      sendPublicLink: data.sendPublicLink,
       go: (name, p = {}) => {
         setHist((h) => [...h, { route, params }]);
         setRoute(name);
@@ -101,6 +103,7 @@ function AuthedApp() {
     else if (route === 'ticketDetail') inner = <TicketDetailAdmin ctx={ctx} id={params.id} />;
     else if (route === 'wiki') inner = <WikiListAdmin ctx={ctx} />;
     else if (route === 'wikiForm') inner = <WikiEditor ctx={ctx} mode={params.mode} id={params.id} />;
+    else if (route === 'inventory') inner = <Inventory ctx={ctx} />;
     return (
       <>
         <AdminShell ctx={ctx} route={route}>

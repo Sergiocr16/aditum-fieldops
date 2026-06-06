@@ -135,6 +135,43 @@ npx firebase-tools@13 deploy --project fieldops-aditum --non-interactive
   (`onEvidenceFinalized`, ffmpeg 720p).
 - **Wiki**: Markdown sanitizado, adjuntos, categorías, búsqueda; soporta `@[video](url)`.
 
+## Módulo de inventario
+
+- Colección `inventory/{id}` (`name, quantity, minQty, purchaseLink, description`) e historial
+  `inventoryMovements/{id}` (consumo por ticket).
+- **Pantalla admin "Inventario":** importar productos desde **Excel** (upsert por nombre; columnas:
+  Nombre, Cantidad, Link de compra, Descripción, Mínimo recomendado), descargar plantilla, crear/editar,
+  panel **"Próximo a comprar / Reabastecer"** (items en o bajo el mínimo, con link de compra) y pestaña
+  **"Historial de consumo"** (qué/cuánto se usó, en qué ticket, cliente/sitio y técnico).
+- **En el ticket (técnico):** sección **"Materiales / repuestos usados"** — selecciona productos del
+  inventario (cantidad + comentario) y un campo libre para consumos fuera de inventario.
+- **Rebaja automática al aprobar:** el stock se descuenta **solo cuando el admin aprueba** el ticket, de
+  forma atómica e idempotente (en `onTicketWritten`), generando los movimientos del historial.
+- **Visibilidad:** el consumo se ve solo en admin y técnico; **no** aparece en el link público.
+- Reglas: `inventory` lectura para staff, escritura admin; `inventoryMovements` lectura admin, escritura
+  solo por la Function.
+
+## Notificaciones por correo
+
+Cloud Function `onTicketWritten` (trigger Firestore sobre `tickets`) envía correos por **Gmail SMTP**
+(Nodemailer) — funciona venga el cambio de la web, la app del técnico o el MCP:
+
+| Evento | Destinatario |
+|---|---|
+| Asignación / reasignación | Técnico (su correo) |
+| Listo para revisión | Admin (`ADMIN_NOTIFY_EMAIL`, por defecto `partners@aditumcr.com`) |
+| Rechazado (con comentario) | Técnico |
+| Aprobado | Técnico |
+
+Config: secrets `SMTP_USER` / `SMTP_PASS` (Gmail + **App Password**) en Secret Manager; env
+`ADMIN_NOTIFY_EMAIL` y `APP_URL` en `functions/.env`. Para (re)configurar:
+
+```bash
+printf 'cuenta@dominio' | npx firebase-tools@13 functions:secrets:set SMTP_USER --data-file=-
+printf 'app-password-16' | npx firebase-tools@13 functions:secrets:set SMTP_PASS --data-file=-
+npx firebase-tools@13 deploy --only functions:onTicketWritten
+```
+
 ## MCP — crear tickets/wiki desde Claude Code
 
 El server `mcp/` se conecta al proyecto **de producción** vía Admin SDK (mismo Firestore que la web), así
@@ -149,7 +186,8 @@ que lo creado aparece de inmediato en la app.
 
 Tools del MCP: `create_ticket`, `list_technicians`, `list_tickets`, `get_ticket`, `assign_ticket`,
 `add_checklist_items`, `wiki_list_pages`, `wiki_get_page`, `wiki_create_page`, `wiki_update_page`,
-`wiki_set_status`, `wiki_list_categories`, `wiki_create_category`.
+`wiki_set_status`, `wiki_list_categories`, `wiki_create_category`, `inventory_list`,
+`inventory_low_stock`, `inventory_upsert`, `inventory_adjust`, `inventory_delete`, `inventory_movements`.
 
 ## Seguridad
 

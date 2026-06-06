@@ -73,6 +73,9 @@ npm --prefix mcp run build                       # se usa vía .mcp.json (server
   `checklist[]`, `evidence[]`, `history[]`, `comments[]`, `approval?`, `share{token,active,...}`.
 - `counters/tickets`: contador atómico para `num`.
 - `wikiCategories/{id}`, `wikiPages/{id}` (status DRAFT|PUBLISHED|INACTIVE, contentMarkdown, attachments[]).
+- `inventory/{id}` (name, quantity, minQty, purchaseLink, description, nameKey) + `inventoryMovements/{id}`
+  (historial de consumo: productId, qty, ticketNum, client, site, techName, at).
+- `tickets` también: `materials[]` ({productId,name,qty,comment}), `materialsNote`, `materialsApplied`.
 
 Estados de ticket: pendiente, asignado, en_proceso, listo_revision, aprobado, rechazado, cerrado.
 
@@ -81,6 +84,13 @@ Estados de ticket: pendiente, asignado, en_proceso, listo_revision, aprobado, re
   credenciales al crear; acción **Regenerar contraseña** (`resetTechnicianPassword`).
 - Link público: `getPublicTicket` muestra el reporte si el link está **activo** (no exige un estado
   concreto del ticket); valida token + expiración y devuelve un DTO **saneado**.
+- Notificaciones: `onTicketWritten` (trigger Firestore + `functions/src/notifications.ts`, Gmail SMTP)
+  envía correos en asignación, listo-para-revisión (→ `ADMIN_NOTIFY_EMAIL`), rechazo y aprobación.
+  Secrets `SMTP_USER`/`SMTP_PASS`. Remitente `SMTP_FROM` (service@aditumcr.com).
+- Compartir reporte: callable `sharePublicLink` (admin) envía el link público por correo (con CC).
+- Inventario: el técnico reporta `materials` en el ticket; el stock se rebaja **solo al aprobar**, dentro
+  de `onTicketWritten` (transacción idempotente con flag `materialsApplied`) y crea `inventoryMovements`.
+  Tools MCP: `inventory_list/low_stock/upsert/adjust/delete/movements`. El consumo NO va al link público.
 
 ## Reglas que DEBES seguir
 

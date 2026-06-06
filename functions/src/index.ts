@@ -3,8 +3,10 @@
 import { setGlobalOptions } from 'firebase-functions/v2';
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { onObjectFinalized } from 'firebase-functions/v2/storage';
+import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import * as logger from 'firebase-functions/logger';
 import * as admin from 'firebase-admin';
+import { SMTP_USER, SMTP_PASS, ADMIN_EMAIL, sendMail, sendMailSafe, assignedTpl, readyTpl, rejectedTpl, approvedTpl, sharedReportTpl, lastRejectionComment } from './notifications';
 import { randomUUID } from 'crypto';
 import { initialsOf, nowCR, SHAREABLE_STATUSES } from './shared';
 
@@ -128,6 +130,35 @@ export const getPublicTicket = onCall(async (req) => {
   return { ticket };
 });
 
+/* ------------------------- share public link by email (admin) ------------------------- */
+const PUBLIC_BASE = process.env.PUBLIC_BASE_URL || 'https://fieldops-aditum.web.app';
+
+export const sharePublicLink = onCall({ secrets: [SMTP_USER, SMTP_PASS] }, async (req) => {
+  assertAdmin(req);
+  const { ticketId, to, cc, message } = req.data || {};
+  if (!ticketId || !to || !String(to).trim()) {
+    throw new HttpsError('invalid-argument', 'ticketId y destinatarios son requeridos.');
+  }
+  const ref = db.collection('tickets').doc(ticketId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Ticket no encontrado.');
+  const t = snap.data() as any;
+  let sh = t.share || {};
+  if (!sh.active || !sh.token) {
+    const token = require('crypto').randomBytes(32).toString('base64url');
+    sh = { active: true, token, url: `${PUBLIC_BASE}/p/${token}`, created: nowCR(), lastVisit: null, createdBy: req.auth!.uid };
+    await ref.set({ share: sh }, { merge: true });
+  }
+  const url = `${PUBLIC_BASE}/p/${sh.token}`;
+  const m = sharedReportTpl({ num: t.num, title: t.title, client: t.client, site: t.site, priority: t.priority, scheduled: t.scheduled }, url, message);
+  try {
+    await sendMail(String(to).trim(), m.subject, m.html, cc ? String(cc).trim() : undefined);
+  } catch (e: any) {
+    throw new HttpsError('internal', 'No se pudo enviar el correo: ' + (e?.message || 'error'));
+  }
+  return { ok: true, url };
+});
+
 /* ------------------------- evidence finalize (compress video) ------------------------- */
 export const onEvidenceFinalized = onObjectFinalized({ memory: '1GiB', timeoutSeconds: 300, region: process.env.STORAGE_REGION || 'us-east1' }, async (event) => {
   const object = event.data;
@@ -187,6 +218,90 @@ export const onEvidenceFinalized = onObjectFinalized({ memory: '1GiB', timeoutSe
     await markEvidenceReady(ticketRef, evidenceId);
   }
 });
+
+/* ------------------------- email notifications (assignment + status) ------------------------- */
+async function techEmail(techId?: string | null): Promise<string | null> {
+  if (!techId) return null;
+  const u = await db.collection('users').doc(techId).get();
+  return u.exists ? (u.data() as any).email || null : null;
+}
+
+export const onTicketWritten = onDocumentWritten(
+  { document: 'tickets/{id}', region: 'us-central1', secrets: [SMTP_USER, SMTP_PASS] },
+  async (event) => {
+    const after = event.data?.after?.data() as any;
+    if (!after) return; // borrado
+    const before = event.data?.before?.data() as any;
+    const ticket = { id: event.params.id, ...after };
+
+    // Asignación / reasignación
+    if (after.techId && after.techId !== before?.techId) {
+      const email = await techEmail(after.techId);
+      const m = assignedTpl(ticket);
+      if (email) await sendMailSafe(email, m.subject, m.html);
+    }
+
+    // Cambio de estado
+    if (after.status !== before?.status) {
+      if (after.status === 'listo_revision') {
+        const m = readyTpl(ticket);
+        await sendMailSafe(ADMIN_EMAIL, m.subject, m.html);
+      } else if (after.status === 'rechazado') {
+        const email = await techEmail(after.techId);
+        const m = rejectedTpl(ticket, lastRejectionComment(after));
+        if (email) await sendMailSafe(email, m.subject, m.html);
+      } else if (after.status === 'aprobado') {
+        const email = await techEmail(after.techId);
+        const m = approvedTpl(ticket);
+        if (email) await sendMailSafe(email, m.subject, m.html);
+      }
+    }
+
+    // Rebaja de inventario + historial de movimientos al aprobar (atómico e idempotente)
+    if (after.status === 'aprobado' && !after.materialsApplied && Array.isArray(after.materials) && after.materials.some((m: any) => m.productId && m.qty > 0)) {
+      const ticketRef = event.data!.after!.ref;
+      let techName = '';
+      if (after.techId) {
+        const us = await db.collection('users').doc(after.techId).get();
+        techName = us.exists ? (us.data() as any).name : '';
+      }
+      try {
+        await db.runTransaction(async (tx) => {
+          const tsnap = await tx.get(ticketRef);
+          const td = tsnap.data() as any;
+          if (!td || td.materialsApplied || td.status !== 'aprobado') return;
+          const mats = (td.materials || []).filter((m: any) => m.productId && m.qty > 0);
+          const refs = mats.map((m: any) => db.collection('inventory').doc(m.productId));
+          const snaps: any[] = [];
+          for (const r of refs) snaps.push(await tx.get(r as FirebaseFirestore.DocumentReference)); // reads antes de writes
+          mats.forEach((m: any, idx: number) => {
+            const s = snaps[idx];
+            if (s.exists) {
+              const cur = Number((s.data() as any).quantity) || 0;
+              tx.update(s.ref, { quantity: Math.max(0, cur - Number(m.qty)) });
+            }
+            const mv = db.collection('inventoryMovements').doc();
+            tx.set(mv, {
+              productId: m.productId,
+              productName: m.name,
+              qty: Number(m.qty),
+              ticketId: ticketRef.id,
+              ticketNum: td.num,
+              client: td.client || '',
+              site: td.site || '',
+              techName,
+              at: nowCR(),
+            });
+          });
+          tx.set(ticketRef, { materialsApplied: true }, { merge: true });
+        });
+        logger.info('inventario rebajado para ticket ' + after.num);
+      } catch (e) {
+        logger.error('error rebajando inventario', e as Error);
+      }
+    }
+  }
+);
 
 async function markEvidenceReady(ticketRef: FirebaseFirestore.DocumentReference, evidenceId: string) {
   await updateEvidence(ticketRef, evidenceId, { status: 'ready' });

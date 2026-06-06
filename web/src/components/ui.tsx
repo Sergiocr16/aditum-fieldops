@@ -99,8 +99,9 @@ export function Logo({ variant = 'horizontal', height = 30, withLockup = true, l
             borderLeft: '1.5px solid ' + (dark ? 'rgba(255,255,255,.25)' : 'var(--border-strong)'),
           }}
         >
-          <span style={{ fontWeight: 700, fontSize: height * 0.55, letterSpacing: '-.01em', color: lockupColor, lineHeight: 1 }}>
-            Field<span style={{ color: 'var(--gold-600)' }}>Ops</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: Math.max(4, Math.round(height * 0.16)), fontWeight: 700, fontSize: height * 0.55, letterSpacing: '-.01em', color: 'var(--gold-600)', lineHeight: 1 }}>
+            <Icon name="wrench" size={Math.round(height * 0.5)} style={{ overflow: 'visible' }} />
+            Service
           </span>
         </span>
       )}
@@ -530,9 +531,25 @@ export function CredentialsCard({ name, email, password }: { name: string; email
 }
 
 /* ---------------- Share link panel ---------------- */
-export function SharePanel({ ticket, onGenerate, onRegenerate, onToggle, onCopy }: any) {
+export function SharePanel({ ticket, onGenerate, onRegenerate, onToggle, onCopy, onSendEmail }: any) {
   const { t } = useTranslation();
   const sh: ShareLink = ticket.share || {};
+  const [to, setTo] = useState('');
+  const [cc, setCc] = useState('');
+  const [msg, setMsg] = useState('');
+  const [sending, setSending] = useState(false);
+  const doSend = async () => {
+    if (!to.trim() || !onSendEmail) return;
+    setSending(true);
+    try {
+      await onSendEmail({ to: to.trim(), cc: cc.trim(), message: msg.trim() });
+      setTo('');
+      setCc('');
+      setMsg('');
+    } finally {
+      setSending(false);
+    }
+  };
   return (
     <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -577,6 +594,21 @@ export function SharePanel({ ticket, onGenerate, onRegenerate, onToggle, onCopy 
           <p style={{ margin: 0, fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5 }}>{t('share.none')}</p>
           <Button variant="primary" size="sm" icon="link" onClick={onGenerate}>
             {t('share.generate')}
+          </Button>
+        </div>
+      )}
+
+      {onSendEmail && (
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Icon name="mail" size={15} />
+            <span style={{ fontWeight: 700, fontSize: 13.5 }}>{t('share.sendByEmail')}</span>
+          </div>
+          <input className="input" style={{ fontSize: 13 }} placeholder={t('share.recipientsPh')} value={to} onChange={(e) => setTo(e.target.value)} />
+          <input className="input" style={{ fontSize: 13 }} placeholder={t('share.ccPh')} value={cc} onChange={(e) => setCc(e.target.value)} />
+          <textarea className="textarea" style={{ fontSize: 13, minHeight: 60 }} placeholder={t('share.messagePh')} value={msg} onChange={(e) => setMsg(e.target.value)} />
+          <Button variant="primary" size="sm" icon="send" onClick={doSend} disabled={sending || !to.trim()}>
+            {sending ? t('share.sending') : t('share.send')}
           </Button>
         </div>
       )}

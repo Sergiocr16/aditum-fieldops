@@ -244,6 +244,87 @@ server.tool(
   }
 );
 
+/* ---------------- Inventory tools ---------------- */
+const invKey = (name: string) => (name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+async function findProduct(nameOrId: string) {
+  const direct = await db.collection('inventory').doc(nameOrId).get();
+  if (direct.exists) return direct;
+  const snap = await db.collection('inventory').get();
+  const key = invKey(nameOrId);
+  return snap.docs.find((d) => ((d.data() as any).nameKey || invKey((d.data() as any).name)) === key) || null;
+}
+
+server.tool('inventory_list', 'Lista los productos del inventario.', {}, async () => {
+  const snap = await db.collection('inventory').get();
+  return ok(snap.docs.map((d) => { const i = d.data() as any; return { id: d.id, name: i.name, quantity: i.quantity, minQty: i.minQty || 0, purchaseLink: i.purchaseLink || '' }; }));
+});
+
+server.tool('inventory_low_stock', 'Recomendación de compra: productos en o por debajo del mínimo recomendado.', {}, async () => {
+  const snap = await db.collection('inventory').get();
+  const low = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))
+    .filter((i: any) => (i.minQty || 0) > 0 && (i.quantity || 0) <= i.minQty)
+    .map((i: any) => ({ name: i.name, available: i.quantity, min: i.minQty, needed: Math.max(0, i.minQty - i.quantity), purchaseLink: i.purchaseLink || '' }));
+  return ok(low);
+});
+
+server.tool(
+  'inventory_upsert',
+  'Crea o actualiza un producto del inventario (upsert por nombre).',
+  { name: z.string(), quantity: z.number().optional(), minQty: z.number().optional(), purchaseLink: z.string().optional(), description: z.string().optional() },
+  async (args) => {
+    const key = invKey(args.name);
+    const snap = await db.collection('inventory').get();
+    const existing = snap.docs.find((d) => ((d.data() as any).nameKey || invKey((d.data() as any).name)) === key);
+    const payload: any = { name: args.name.trim(), nameKey: key, updatedAt: nowCR() };
+    if (args.quantity !== undefined) payload.quantity = args.quantity;
+    if (args.minQty !== undefined) payload.minQty = args.minQty;
+    if (args.purchaseLink !== undefined) payload.purchaseLink = args.purchaseLink;
+    if (args.description !== undefined) payload.description = args.description;
+    if (existing) { await existing.ref.set(payload, { merge: true }); return ok({ ok: true, id: existing.id, updated: true }); }
+    payload.quantity = payload.quantity || 0;
+    payload.minQty = payload.minQty || 0;
+    payload.createdAt = nowCR();
+    const ref = await db.collection('inventory').add(payload);
+    return ok({ ok: true, id: ref.id, created: true });
+  }
+);
+
+server.tool(
+  'inventory_adjust',
+  'Ajusta la cantidad de un producto: set fija el valor, delta lo suma/resta.',
+  { product: z.string().describe('nombre o id'), set: z.number().optional(), delta: z.number().optional() },
+  async (args) => {
+    const doc = await findProduct(args.product);
+    if (!doc) return ok({ ok: false, error: 'producto no encontrado' });
+    const cur = Number((doc.data() as any).quantity) || 0;
+    const next = args.set !== undefined ? args.set : cur + (args.delta || 0);
+    await doc.ref.set({ quantity: Math.max(0, next), updatedAt: nowCR() }, { merge: true });
+    return ok({ ok: true, name: (doc.data() as any).name, quantity: Math.max(0, next) });
+  }
+);
+
+server.tool('inventory_delete', 'Elimina un producto del inventario.', { product: z.string() }, async (args) => {
+  const doc = await findProduct(args.product);
+  if (!doc) return ok({ ok: false, error: 'producto no encontrado' });
+  await doc.ref.delete();
+  return ok({ ok: true });
+});
+
+server.tool(
+  'inventory_movements',
+  'Historial de consumo (qué se usó, cuánto, en qué ticket). Filtro opcional por producto.',
+  { product: z.string().optional(), limit: z.number().optional() },
+  async (args) => {
+    let snap = await db.collection('inventoryMovements').orderBy('at', 'desc').limit(args.limit || 50).get();
+    let rows = snap.docs.map((d) => d.data() as any);
+    if (args.product) {
+      const key = invKey(args.product);
+      rows = rows.filter((m) => invKey(m.productName) === key || m.productId === args.product);
+    }
+    return ok(rows.map((m) => ({ at: m.at, product: m.productName, qty: m.qty, ticket: m.ticketNum, location: [m.client, m.site].filter(Boolean).join(' · '), tech: m.techName })));
+  }
+);
+
 /* ---------------- start ---------------- */
 const transport = new StdioServerTransport();
 await server.connect(transport);

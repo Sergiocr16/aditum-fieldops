@@ -1,11 +1,13 @@
 /* © 2026 Aditum — Aditum FieldOps — Technician mobile ticket detail (on site) */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Icon, StatusBadge, PriorityChip, Field, Textarea, Button, Lightbox, EvidenceThumb, toast } from '../../components/ui';
+import { Icon, StatusBadge, PriorityChip, Field, Textarea, Input, Select, Button, Lightbox, EvidenceThumb, toast } from '../../components/ui';
 import { MobileHeader } from './MobileDashboard';
 import Uploader from '../../components/Uploader';
+import { useInventory } from '../../lib/inventory';
 import { now } from '../../lib/time';
 import type { AppCtx } from '../../lib/ctx';
+import type { MaterialUse } from '../../lib/types';
 
 function MBlock({ icon, q, children, tone }: any) {
   const tones: any = {
@@ -33,6 +35,12 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
   const [obs, setObs] = useState(tk?.techObs || '');
   const [lb, setLb] = useState<number | null>(null);
   const [warn, setWarn] = useState('');
+  const inv = useInventory();
+  const [materials, setMaterials] = useState<MaterialUse[]>(tk?.materials || []);
+  const [matNote, setMatNote] = useState(tk?.materialsNote || '');
+  const [selProduct, setSelProduct] = useState('');
+  const [selQty, setSelQty] = useState(1);
+  const [selComment, setSelComment] = useState('');
   if (!tk) return null;
   const me = ctx.admin.name;
   const doneCount = tk.checklist.filter((c) => c.done).length;
@@ -51,6 +59,20 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
     ctx.updateTicket(id, { status: 'en_proceso', history: [...tk.history, { status: 'en_proceso', at: now(), by: me }] });
     toast(t('mobile.inProcess'), 'success');
   };
+  const persistMaterials = (mats: MaterialUse[], noteVal: string) => {
+    setMaterials(mats);
+    ctx.updateTicket(id, { materials: mats, materialsNote: noteVal });
+  };
+  const addMaterial = () => {
+    if (!selProduct) return;
+    const p = inv.items.find((x) => x.id === selProduct);
+    if (!p) return;
+    persistMaterials([...materials, { productId: p.id, name: p.name, qty: Math.max(1, Number(selQty) || 1), comment: selComment.trim() }], matNote);
+    setSelProduct('');
+    setSelQty(1);
+    setSelComment('');
+  };
+  const removeMaterial = (idx: number) => persistMaterials(materials.filter((_, i) => i !== idx), matNote);
   const markReady = () => {
     ctx.updateTicket(id, { techNote: note, techObs: obs });
     if (!allDone) {
@@ -70,6 +92,8 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
       status: 'listo_revision',
       techNote: note,
       techObs: obs,
+      materials,
+      materialsNote: matNote,
       readyAt: now(),
       history: [...tk.history, { status: 'listo_revision', at: now(), by: me }],
     });
@@ -161,6 +185,52 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
           <Field label={t('mobile.techObs')} hint={t('common.optional')}>
             <Textarea placeholder={t('mobile.techObsPh')} value={obs} onChange={(e: any) => setObs(e.target.value)} disabled={!canEdit} style={{ minHeight: 64, fontSize: 15 }} />
           </Field>
+        </MBlock>
+
+        <MBlock icon="ticket" q={t('materials.title')}>
+          {materials.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+              {materials.map((mt, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, border: '1px solid var(--border)', borderRadius: 10, padding: '8px 10px' }}>
+                  <span style={{ fontWeight: 700, fontSize: 14, minWidth: 34 }}>{mt.qty}×</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>{mt.name}</div>
+                    {mt.comment ? <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{mt.comment}</div> : null}
+                  </div>
+                  {canEdit && (
+                    <button className="icon-btn" onClick={() => removeMaterial(i)} style={{ color: 'var(--text-3)' }}>
+                      <Icon name="trash" size={15} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {canEdit && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <Select value={selProduct} onChange={(e: any) => setSelProduct(e.target.value)}>
+                <option value="">{t('materials.selectProduct')}</option>
+                {inv.items.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name} ({p.quantity})</option>
+                ))}
+              </Select>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ width: 90 }}>
+                  <Input type="number" min={1} value={selQty} onChange={(e: any) => setSelQty(Number(e.target.value))} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Input placeholder={t('materials.commentPh')} value={selComment} onChange={(e: any) => setSelComment(e.target.value)} />
+                </div>
+              </div>
+              <Button variant="ghost" icon="plus" block onClick={addMaterial} disabled={!selProduct}>{t('materials.addLine')}</Button>
+              <div style={{ height: 4 }} />
+              <Field label={t('materials.extra')} hint={t('common.optional')}>
+                <Textarea placeholder={t('materials.extraPh')} value={matNote} onChange={(e: any) => setMatNote(e.target.value)} onBlur={() => persistMaterials(materials, matNote)} style={{ minHeight: 56, fontSize: 14 }} />
+              </Field>
+            </div>
+          )}
+          {!canEdit && materials.length === 0 && !matNote && <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{t('materials.none')}</div>}
+          {!canEdit && matNote && <p style={{ margin: '6px 0 0', fontSize: 13.5, color: 'var(--text-2)' }}>{matNote}</p>}
         </MBlock>
 
         <MBlock icon="upload" q={t('mobile.uploadEvidence')}>

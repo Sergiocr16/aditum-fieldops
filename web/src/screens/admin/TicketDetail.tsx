@@ -178,6 +178,29 @@ export default function TicketDetailAdmin({ ctx, id }: { ctx: AppCtx; id: string
             </div>
           </Block>
 
+          {((tk.materials && tk.materials.length > 0) || tk.materialsNote) && (
+            <Block title={t('materials.reported')} icon="ticket">
+              {tk.materials && tk.materials.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: tk.materialsNote ? 12 : 0 }}>
+                  {tk.materials.map((mt, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
+                      <span style={{ fontWeight: 700, fontSize: 14, minWidth: 36 }}>{mt.qty}×</span>
+                      <div style={{ flex: 1 }}>
+                        <span style={{ fontSize: 14, fontWeight: 600 }}>{mt.name}</span>
+                        {mt.comment ? <span style={{ fontSize: 12.5, color: 'var(--text-3)' }}> · {mt.comment}</span> : null}
+                        {!mt.productId ? <span className="tag" style={{ marginLeft: 6 }}>extra</span> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {tk.materialsNote && <Prose label={t('materials.extra')} text={tk.materialsNote} />}
+              {tk.status !== 'aprobado' && tk.status !== 'cerrado' && (
+                <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 6 }}>{t('materials.willDeduct')}</div>
+              )}
+            </Block>
+          )}
+
           <Block title={`${t('ticketDetail.gallery')} · ${tk.evidence.length}`} icon="camera">
             {tk.evidence.length ? (
               <div className="evidence-grid">
@@ -252,6 +275,14 @@ export default function TicketDetailAdmin({ ctx, id }: { ctx: AppCtx; id: string
             onRegenerate={() => { regenerateLink(ctx, tk); toast(t('share.regenerated'), 'success'); }}
             onToggle={() => { toggleLink(ctx, tk); toast(tk.share.active ? t('share.disabled') : t('share.activated')); }}
             onCopy={() => { navigator.clipboard && navigator.clipboard.writeText(tk.share.url || ''); toast(t('share.copied'), 'success'); }}
+            onSendEmail={async ({ to, cc, message }: any) => {
+              try {
+                await ctx.sendPublicLink(tk.id, to, cc, message);
+                toast(t('share.sent'), 'success');
+              } catch (e: any) {
+                toast(e?.message || t('share.sendErr'), 'error');
+              }
+            }}
           />
 
           <button onClick={() => ctx.openPublic(tk)} className="btn btn-ghost btn-block" style={{ justifyContent: 'space-between' }}>

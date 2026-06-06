@@ -50,6 +50,20 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ---------- inventory ----------
+    // Técnicos pueden leerlo (para seleccionar materiales); solo admin escribe.
+    match /inventory/{id} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // ---------- inventory movements (historial de consumo) ----------
+    // Solo admin lee; lo escribe únicamente la Cloud Function (Admin SDK).
+    match /inventoryMovements/{id} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

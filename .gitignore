@@ -31,3 +31,6 @@ ui-debug.log
 .DS_Store
 .idea/
 .vscode/
+
+# build info
+*.tsbuildinfo

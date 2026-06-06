@@ -31,6 +31,7 @@ export interface DataState {
   }) => Promise<{ uid: string; password: string }>;
   updateTechnician: (id: string, patch: Partial<AppUser>) => Promise<void>;
   resetTechnicianPassword: (id: string) => Promise<{ password: string }>;
+  sendPublicLink: (ticketId: string, to: string, cc?: string, message?: string) => Promise<{ url: string }>;
 }
 
 const Ctx = createContext<DataState>(null as any);
@@ -117,6 +118,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         const fn = httpsCallable(functions, 'resetTechnicianPassword');
         const res: any = await fn({ id });
         return res.data as { password: string };
+      },
+      sendPublicLink: async (ticketId, to, cc, message) => {
+        const fn = httpsCallable(functions, 'sharePublicLink');
+        const res: any = await fn({ ticketId, to, cc, message });
+        return res.data as { url: string };
       },
     }),
     []

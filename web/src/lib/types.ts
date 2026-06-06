@@ -120,6 +120,38 @@ export interface WikiPage {
   publishedAt?: string | null;
 }
 
+export interface InventoryItem {
+  id: string;
+  name: string;
+  nameKey?: string;
+  quantity: number;
+  minQty: number;
+  purchaseLink?: string;
+  description?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface MaterialUse {
+  productId: string | null;
+  name: string;
+  qty: number;
+  comment?: string;
+}
+
+export interface InventoryMovement {
+  id: string;
+  productId: string;
+  productName: string;
+  qty: number;
+  ticketId: string;
+  ticketNum: string;
+  client?: string;
+  site?: string;
+  techName?: string;
+  at: string;
+}
+
 export interface Ticket {
   id: string;
   num: string;
@@ -148,4 +180,7 @@ export interface Ticket {
   comments: Comment[];
   approval?: Approval;
   share: ShareLink;
+  materials?: MaterialUse[];
+  materialsNote?: string;
+  materialsApplied?: boolean;
 }

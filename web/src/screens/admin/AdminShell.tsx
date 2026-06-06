@@ -31,10 +31,11 @@ export default function AdminShell({ ctx, route, children }: { ctx: AppCtx; rout
     { key: 'dashboard', label: t('nav.dashboard'), icon: 'dashboard', route: 'dashboard' },
     { key: 'tickets', label: t('nav.tickets'), icon: 'ticket', route: 'tickets' },
     { key: 'technicians', label: t('nav.technicians'), icon: 'users', route: 'technicians' },
+    { key: 'inventory', label: t('inventory.nav'), icon: 'building', route: 'inventory' },
     { key: 'wiki', label: t('wiki.nav'), icon: 'file', route: 'wiki' },
   ];
-  const activeKey = route === 'dashboard' ? 'dashboard' : ['tickets', 'ticketForm', 'ticketDetail'].includes(route) ? 'tickets' : route === 'technicians' ? 'technicians' : ['wiki', 'wikiForm'].includes(route) ? 'wiki' : '';
-  const titles: any = { dashboard: t('nav.dashboard'), tickets: t('nav.tickets'), technicians: t('nav.technicians'), ticketForm: t('nav.ticket'), ticketDetail: t('nav.ticketDetail'), wiki: t('wiki.title'), wikiForm: t('wiki.title') };
+  const activeKey = route === 'dashboard' ? 'dashboard' : ['tickets', 'ticketForm', 'ticketDetail'].includes(route) ? 'tickets' : route === 'technicians' ? 'technicians' : route === 'inventory' ? 'inventory' : ['wiki', 'wikiForm'].includes(route) ? 'wiki' : '';
+  const titles: any = { dashboard: t('nav.dashboard'), tickets: t('nav.tickets'), technicians: t('nav.technicians'), ticketForm: t('nav.ticket'), ticketDetail: t('nav.ticketDetail'), inventory: t('inventory.title'), wiki: t('wiki.title'), wikiForm: t('wiki.title') };
   const admin = ctx.admin;
 
   return (
@@ -87,7 +88,7 @@ export default function AdminShell({ ctx, route, children }: { ctx: AppCtx; rout
             <button className="icon-btn" onClick={() => setMenuOpen((o) => !o)} style={{ display: 'none' }}>
               <Icon name="menu" size={18} />
             </button>
-            <span style={{ fontWeight: 700, fontSize: 16 }}>{titles[route] || 'Aditum FieldOps'}</span>
+            <span style={{ fontWeight: 700, fontSize: 16 }}>{titles[route] || 'Aditum Service'}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <LangSwitcher />

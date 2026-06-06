@@ -11,6 +11,7 @@ export interface AppCtx {
   addTechnician: (data: { name: string; email: string; phone?: string; password: string }) => Promise<{ uid: string; password: string }>;
   updateTechnician: (id: string, patch: Partial<AppUser>) => void | Promise<void>;
   resetTechnicianPassword: (id: string) => Promise<{ password: string }>;
+  sendPublicLink: (ticketId: string, to: string, cc?: string, message?: string) => Promise<{ url: string }>;
   go: (name: string, params?: any) => void;
   back: () => void;
   logout: () => void;
