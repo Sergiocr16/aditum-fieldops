@@ -1,7 +1,7 @@
 /* © 2026 Aditum — Aditum FieldOps — Tickets list */
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Icon, Avatar, Button, StatusBadge, PriorityChip, EmptyState, Input, toast } from '../../components/ui';
+import { Icon, Avatar, Button, StatusBadge, PriorityChip, EmptyState, Input, Field, toast } from '../../components/ui';
 import { PageHeader } from './AdminShell';
 import { STATUS, PRIORITY, SHAREABLE_STATUSES } from '../../lib/config';
 import { generateLink } from '../../lib/actions';
@@ -88,6 +88,9 @@ export default function TicketsList({ ctx, onApprove, onReject, onReassign }: { 
   const [fTech, setFTech] = useState('');
   const [fPrio, setFPrio] = useState('');
   const [fClient, setFClient] = useState('');
+  const [fFrom, setFFrom] = useState('');
+  const [fTo, setFTo] = useState('');
+  const [dateOpen, setDateOpen] = useState(false);
   const [page, setPage] = useState(1);
 
   const clients = [...new Set(ctx.db.tickets.map((x) => x.client))];
@@ -98,21 +101,25 @@ export default function TicketsList({ ctx, onApprove, onReject, onReassign }: { 
     if (fTech && tk.techId !== fTech) return false;
     if (fPrio && tk.priority !== fPrio) return false;
     if (fClient && tk.client !== fClient) return false;
+    if (fFrom && (!tk.scheduled || tk.scheduled < fFrom)) return false;
+    if (fTo && (!tk.scheduled || tk.scheduled > fTo)) return false;
     return true;
   });
-  const hasFilters = q || fStatus || fTech || fPrio || fClient;
+  const hasFilters = q || fStatus || fTech || fPrio || fClient || fFrom || fTo;
   const perPage = 6;
   const pages = Math.max(1, Math.ceil(rows.length / perPage));
   const pageRows = rows.slice((page - 1) * perPage, page * perPage);
   useEffect(() => {
     setPage(1);
-  }, [q, fStatus, fTech, fPrio, fClient]);
+  }, [q, fStatus, fTech, fPrio, fClient, fFrom, fTo]);
   const clearAll = () => {
     setQ('');
     setFStatus('');
     setFTech('');
     setFPrio('');
     setFClient('');
+    setFFrom('');
+    setFTo('');
   };
 
   return (
@@ -128,10 +135,28 @@ export default function TicketsList({ ctx, onApprove, onReject, onReassign }: { 
           <FilterSelect value={fTech} onChange={setFTech} options={[['', t('tickets.allTechs')], ...ctx.db.technicians.map((x) => [x.id, x.name])]} />
           <FilterSelect value={fPrio} onChange={setFPrio} options={[['', t('tickets.allPriorities')], ...Object.values(PRIORITY).map((p) => [p.key, t('priority.' + p.key)])]} />
           <FilterSelect value={fClient} onChange={setFClient} options={[['', t('tickets.allClients')], ...clients.map((c) => [c, c])]} />
-          <button className="date-btn">
-            <Icon name="calendar" size={15} />
-            {t('common.date')}
-          </button>
+          <div style={{ position: 'relative' }}>
+            <button className="date-btn" onClick={() => setDateOpen((o) => !o)} style={fFrom || fTo ? { borderColor: 'var(--navy-500)', color: 'var(--navy-700)', fontWeight: 600 } : {}}>
+              <Icon name="calendar" size={15} />
+              {fFrom || fTo ? `${fFrom || '…'} → ${fTo || '…'}` : t('common.date')}
+              <Icon name="chevronDown" size={14} />
+            </button>
+            {dateOpen && (
+              <div className="menu-pop fade-in" style={{ right: 'auto', left: 0, top: 44, padding: 14, minWidth: 230 }} onMouseLeave={() => setDateOpen(false)}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <Field label={t('tickets.dateFrom')}>
+                    <Input type="date" value={fFrom} onChange={(e: any) => setFFrom(e.target.value)} />
+                  </Field>
+                  <Field label={t('tickets.dateTo')}>
+                    <Input type="date" value={fTo} onChange={(e: any) => setFTo(e.target.value)} />
+                  </Field>
+                  <button onClick={() => { setFFrom(''); setFTo(''); }} style={{ border: 'none', background: 'transparent', color: 'var(--navy-700)', fontWeight: 600, fontSize: 13, cursor: 'pointer', textAlign: 'left', padding: 0 }}>
+                    {t('tickets.clearDate')}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           {hasFilters && (
             <button onClick={clearAll} style={{ border: 'none', background: 'transparent', color: 'var(--navy-700)', fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
               <Icon name="x" size={14} />

@@ -1,7 +1,7 @@
 /* © 2026 Aditum — Aditum FieldOps — Technician mobile ticket detail (on site) */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Icon, StatusBadge, PriorityChip, Field, Textarea, Input, Select, Button, Lightbox, EvidenceThumb, toast } from '../../components/ui';
+import { Icon, StatusBadge, PriorityChip, Field, Textarea, Input, Select, Button, Stepper, Modal, Lightbox, EvidenceThumb, toast } from '../../components/ui';
 import { MobileHeader } from './MobileDashboard';
 import Uploader from '../../components/Uploader';
 import { useInventory } from '../../lib/inventory';
@@ -41,6 +41,7 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
   const [selProduct, setSelProduct] = useState('');
   const [selQty, setSelQty] = useState(1);
   const [selComment, setSelComment] = useState('');
+  const [confirmReady, setConfirmReady] = useState(false);
   if (!tk) return null;
   const me = ctx.admin.name;
   const doneCount = tk.checklist.filter((c) => c.done).length;
@@ -73,8 +74,9 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
     setSelComment('');
   };
   const removeMaterial = (idx: number) => persistMaterials(materials.filter((_, i) => i !== idx), matNote);
-  const markReady = () => {
-    ctx.updateTicket(id, { techNote: note, techObs: obs });
+  const setMaterialQty = (idx: number, qty: number) => persistMaterials(materials.map((m, i) => (i === idx ? { ...m, qty: Math.max(1, qty) } : m)), matNote);
+  const requestReady = () => {
+    ctx.updateTicket(id, { techNote: note, techObs: obs, materials, materialsNote: matNote });
     if (!allDone) {
       setWarn(t('mobile.warnChecklist'));
       return;
@@ -88,6 +90,10 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
       return;
     }
     setWarn('');
+    setConfirmReady(true);
+  };
+  const submitReady = () => {
+    setConfirmReady(false);
     ctx.updateTicket(id, {
       status: 'listo_revision',
       techNote: note,
@@ -191,43 +197,50 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
           {materials.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
               {materials.map((mt, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, border: '1px solid var(--border)', borderRadius: 10, padding: '8px 10px' }}>
-                  <span style={{ fontWeight: 700, fontSize: 14, minWidth: 34 }}>{mt.qty}×</span>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, border: '1px solid var(--border)', borderRadius: 12, padding: '10px 12px', background: 'var(--surface-2)' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600 }}>{mt.name}</div>
-                    {mt.comment ? <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{mt.comment}</div> : null}
+                    <div style={{ fontSize: 14.5, fontWeight: 600, lineHeight: 1.3 }}>{mt.name}</div>
+                    {mt.comment ? <div style={{ fontSize: 12.5, color: 'var(--text-3)', marginTop: 2 }}>{mt.comment}</div> : null}
                   </div>
-                  {canEdit && (
-                    <button className="icon-btn" onClick={() => removeMaterial(i)} style={{ color: 'var(--text-3)' }}>
-                      <Icon name="trash" size={15} />
-                    </button>
+                  {canEdit ? (
+                    <>
+                      <Stepper value={mt.qty} onChange={(v: number) => setMaterialQty(i, v)} size={34} />
+                      <button className="icon-btn" onClick={() => removeMaterial(i)} style={{ color: 'var(--st-rech-fg)', flex: 'none' }} aria-label="x">
+                        <Icon name="trash" size={16} />
+                      </button>
+                    </>
+                  ) : (
+                    <span style={{ fontWeight: 700, fontSize: 15 }}>{mt.qty}×</span>
                   )}
                 </div>
               ))}
             </div>
           )}
           {canEdit && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ background: 'var(--surface)', border: '1px dashed var(--border-strong)', borderRadius: 12, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
               <Select value={selProduct} onChange={(e: any) => setSelProduct(e.target.value)}>
                 <option value="">{t('materials.selectProduct')}</option>
                 {inv.items.map((p) => (
                   <option key={p.id} value={p.id}>{p.name} ({p.quantity})</option>
                 ))}
               </Select>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <div style={{ width: 90 }}>
-                  <Input type="number" min={1} value={selQty} onChange={(e: any) => setSelQty(Number(e.target.value))} />
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 600 }}>{t('materials.qty')}</span>
+                <Stepper value={selQty} onChange={setSelQty} size={40} />
                 <div style={{ flex: 1 }}>
                   <Input placeholder={t('materials.commentPh')} value={selComment} onChange={(e: any) => setSelComment(e.target.value)} />
                 </div>
               </div>
-              <Button variant="ghost" icon="plus" block onClick={addMaterial} disabled={!selProduct}>{t('materials.addLine')}</Button>
-              <div style={{ height: 4 }} />
+              <Button variant="gold" icon="plus" block onClick={addMaterial} disabled={!selProduct}>{t('materials.addLine')}</Button>
+            </div>
+          )}
+          {canEdit && (
+            <>
+              <div style={{ height: 10 }} />
               <Field label={t('materials.extra')} hint={t('common.optional')}>
                 <Textarea placeholder={t('materials.extraPh')} value={matNote} onChange={(e: any) => setMatNote(e.target.value)} onBlur={() => persistMaterials(materials, matNote)} style={{ minHeight: 56, fontSize: 14 }} />
               </Field>
-            </div>
+            </>
           )}
           {!canEdit && materials.length === 0 && !matNote && <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{t('materials.none')}</div>}
           {!canEdit && matNote && <p style={{ margin: '6px 0 0', fontSize: 13.5, color: 'var(--text-2)' }}>{matNote}</p>}
@@ -253,20 +266,21 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
           )}
         </MBlock>
 
-        {warn && (
-          <div className="fade-in" style={{ display: 'flex', gap: 9, background: 'var(--st-rech-bg)', border: '1px solid #f3cfcf', color: 'var(--st-rech-fg)', padding: '12px 14px', borderRadius: 12, fontSize: 13.5, lineHeight: 1.4, alignItems: 'flex-start' }}>
-            <Icon name="alert" size={17} style={{ flex: 'none', marginTop: 1 }} />
-            {warn}
-          </div>
-        )}
       </div>
 
       {canEdit && (
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid var(--border)', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 9, boxShadow: '0 -4px 20px rgba(0,30,47,.07)' }}>
+          {warn && (
+            <div className="fade-in" style={{ display: 'flex', gap: 9, background: 'var(--st-rech-bg)', border: '1px solid #eeb5b5', color: 'var(--st-rech-fg)', padding: '11px 13px', borderRadius: 12, fontSize: 13.5, lineHeight: 1.4, alignItems: 'flex-start', fontWeight: 500 }}>
+              <Icon name="alert" size={17} style={{ flex: 'none', marginTop: 1 }} />
+              <span style={{ flex: 1 }}>{warn}</span>
+              <button onClick={() => setWarn('')} style={{ border: 'none', background: 'transparent', color: 'var(--st-rech-fg)', cursor: 'pointer', padding: 0, flex: 'none' }}><Icon name="x" size={16} /></button>
+            </div>
+          )}
           {(tk.status === 'asignado' || tk.status === 'pendiente') && (
             <Button variant="ghost" size="lg" block icon="play" onClick={markProcess}>{t('mobile.markProcess')}</Button>
           )}
-          <Button variant="gold" size="lg" block icon="checkCircle" onClick={markReady}>{t('mobile.markReady')}</Button>
+          <Button variant="gold" size="lg" block icon="checkCircle" onClick={requestReady}>{t('mobile.markReady')}</Button>
         </div>
       )}
       {tk.status === 'listo_revision' && (
@@ -277,6 +291,23 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
       )}
 
       {lb != null && <Lightbox items={tk.evidence} index={lb} onClose={() => setLb(null)} onIndex={setLb} />}
+
+      <Modal
+        open={confirmReady}
+        onClose={() => setConfirmReady(false)}
+        width={400}
+        tone="success"
+        title={t('mobile.confirmReadyTitle')}
+        sub={t('mobile.confirmReadySub')}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmReady(false)}>{t('common.cancel')}</Button>
+            <Button variant="gold" icon="checkCircle" onClick={submitReady}>{t('mobile.confirmReadyBtn')}</Button>
+          </>
+        }
+      >
+        <div style={{ fontSize: 14, color: 'var(--text-2)', lineHeight: 1.5 }}>{t('mobile.confirmReadyBody')}</div>
+      </Modal>
     </div>
   );
 }

@@ -100,7 +100,7 @@ export function Logo({ variant = 'horizontal', height = 30, withLockup = true, l
           }}
         >
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: Math.max(4, Math.round(height * 0.16)), fontWeight: 700, fontSize: height * 0.55, letterSpacing: '-.01em', color: 'var(--gold-600)', lineHeight: 1 }}>
-            <Icon name="wrench" size={Math.round(height * 0.5)} style={{ overflow: 'visible' }} />
+            <Icon name="zap" size={Math.round(height * 0.5)} fill="var(--gold-600)" stroke={1.5} style={{ overflow: 'visible' }} />
             Service
           </span>
         </span>
@@ -285,6 +285,58 @@ export function Toaster() {
   );
 }
 
+/* ---------------- Confirm dialog (styled, promise-based) ---------------- */
+interface ConfirmOpts {
+  title: string;
+  message?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  tone?: 'danger' | 'success' | 'info';
+  confirmIcon?: string;
+}
+let _confirmFn: ((opts: ConfirmOpts, resolve: (v: boolean) => void) => void) | null = null;
+export function confirmDialog(opts: ConfirmOpts): Promise<boolean> {
+  if (_confirmFn) return new Promise((resolve) => _confirmFn!(opts, resolve));
+  return Promise.resolve(typeof window !== 'undefined' ? window.confirm(opts.message || opts.title) : false);
+}
+export function ConfirmRoot() {
+  const { t } = useTranslation();
+  const [state, setState] = useState<{ opts: ConfirmOpts; resolve: (v: boolean) => void } | null>(null);
+  useEffect(() => {
+    _confirmFn = (opts, resolve) => setState({ opts, resolve });
+    return () => {
+      _confirmFn = null;
+    };
+  }, []);
+  if (!state) return null;
+  const { opts, resolve } = state;
+  const done = (v: boolean) => {
+    resolve(v);
+    setState(null);
+  };
+  return (
+    <Modal
+      open
+      onClose={() => done(false)}
+      width={420}
+      tone={opts.tone || 'info'}
+      title={opts.title}
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => done(false)}>
+            {opts.cancelLabel || t('common.cancel')}
+          </Button>
+          <Button variant={opts.tone === 'danger' ? 'danger' : opts.tone === 'success' ? 'success' : 'primary'} icon={opts.confirmIcon} onClick={() => done(true)}>
+            {opts.confirmLabel || t('common.confirm')}
+          </Button>
+        </>
+      }
+    >
+      <div style={{ fontSize: 14, color: 'var(--text-2)', lineHeight: 1.5 }}>{opts.message}</div>
+    </Modal>
+  );
+}
+
 /* ---------------- Empty state ---------------- */
 export function EmptyState({ icon = 'ticket', title, sub, action }: any) {
   return (
@@ -341,6 +393,42 @@ export function Select({ children, ...rest }: any) {
 }
 export function Toggle({ on, onClick }: any) {
   return <button className={'toggle' + (on ? ' on' : '')} onClick={onClick} aria-pressed={on} />;
+}
+
+/* ---------------- Stepper (− value +) ---------------- */
+export function Stepper({ value, onChange, min = 1, max, size = 40 }: any) {
+  const clamp = (n: number) => {
+    if (isNaN(n)) n = min;
+    if (n < min) n = min;
+    if (max != null && n > max) n = max;
+    return n;
+  };
+  const btn: React.CSSProperties = {
+    width: size,
+    height: size,
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--navy-700)',
+    fontSize: size * 0.5,
+    fontWeight: 700,
+    cursor: 'pointer',
+    lineHeight: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  };
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid var(--border-strong)', borderRadius: 10, overflow: 'hidden', background: '#fff', flex: 'none' }}>
+      <button type="button" onClick={() => onChange(clamp(value - 1))} style={btn} aria-label="−">−</button>
+      <input
+        value={value}
+        onChange={(e) => onChange(clamp(parseInt(e.target.value.replace(/\D/g, ''), 10)))}
+        inputMode="numeric"
+        style={{ width: 40, height: size, textAlign: 'center', border: 'none', borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)', fontWeight: 700, fontSize: 15, color: 'var(--text)', background: 'transparent', padding: 0 }}
+      />
+      <button type="button" onClick={() => onChange(clamp(value + 1))} style={btn} aria-label="+">+</button>
+    </div>
+  );
 }
 
 /* ---------------- Language switcher ---------------- */

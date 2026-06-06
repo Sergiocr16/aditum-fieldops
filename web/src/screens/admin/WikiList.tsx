@@ -1,7 +1,7 @@
 /* © 2026 Aditum — Aditum FieldOps — Admin wiki list */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Icon, Button, Input, EmptyState, Modal, Field, toast } from '../../components/ui';
+import { Icon, Button, Input, EmptyState, Modal, Field, toast, confirmDialog } from '../../components/ui';
 import { PageHeader } from './AdminShell';
 import { useWiki } from '../../lib/wiki';
 import type { AppCtx } from '../../lib/ctx';
@@ -107,7 +107,7 @@ export default function WikiListAdmin({ ctx }: { ctx: AppCtx }) {
                             <Icon name="xCircle" size={16} />
                           </button>
                         )}
-                        <button className="icon-btn" title={t('wiki.delete')} style={{ color: 'var(--st-rech-fg)' }} onClick={() => { if (confirm(t('wiki.deleteConfirm'))) { wiki.deletePage(p.id); toast(t('wiki.deleted')); } }}>
+                        <button className="icon-btn" title={t('wiki.delete')} style={{ color: 'var(--st-rech-fg)' }} onClick={async () => { if (await confirmDialog({ title: t('wiki.delete'), message: t('wiki.deleteConfirm'), tone: 'danger', confirmLabel: t('wiki.delete'), confirmIcon: 'trash' })) { wiki.deletePage(p.id); toast(t('wiki.deleted')); } }}>
                           <Icon name="trash" size={16} />
                         </button>
                       </div>

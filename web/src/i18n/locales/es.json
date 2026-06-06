@@ -122,6 +122,9 @@
     "allClients": "Todos los clientes",
     "clear": "Limpiar",
     "clearFilters": "Limpiar filtros",
+    "dateFrom": "Desde",
+    "dateTo": "Hasta",
+    "clearDate": "Limpiar fecha",
     "colNum": "N°",
     "colTitle": "Título",
     "colClient": "Cliente",
@@ -311,7 +314,11 @@
     "sentForReview": "¡Enviado para revisión!",
     "warnChecklist": "Completa todos los ítems del checklist antes de enviar.",
     "warnEvidence": "Sube al menos una evidencia (foto o video) antes de enviar.",
-    "warnNote": "Describe el trabajo realizado antes de enviar."
+    "warnNote": "Describe el trabajo realizado antes de enviar.",
+    "confirmReadyTitle": "¿Enviar para revisión?",
+    "confirmReadySub": "Revisá que todo esté completo.",
+    "confirmReadyBody": "El administrador recibirá el ticket para revisarlo. No vas a poder editarlo hasta que lo apruebe o lo devuelva con correcciones.",
+    "confirmReadyBtn": "Sí, enviar"
   },
   "public": {
     "reportLabel": "Reporte de trabajo técnico",

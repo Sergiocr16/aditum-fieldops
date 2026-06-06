@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { useAuth } from './lib/auth';
 import { useData } from './lib/store';
-import { Icon, Toaster } from './components/ui';
+import { Icon, Toaster, ConfirmRoot } from './components/ui';
 import { publicUrl, makePublicToken } from './lib/ctx';
 import { now } from './lib/time';
 import type { AppCtx } from './lib/ctx';
@@ -144,6 +144,7 @@ export default function App() {
         <Route path="*" element={<Root />} />
       </Routes>
       <Toaster />
+      <ConfirmRoot />
     </>
   );
 }

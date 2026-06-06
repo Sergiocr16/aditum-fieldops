@@ -122,6 +122,9 @@
     "allClients": "All clients",
     "clear": "Clear",
     "clearFilters": "Clear filters",
+    "dateFrom": "From",
+    "dateTo": "To",
+    "clearDate": "Clear date",
     "colNum": "#",
     "colTitle": "Title",
     "colClient": "Client",
@@ -311,7 +314,11 @@
     "sentForReview": "Sent for review!",
     "warnChecklist": "Complete all checklist items before sending.",
     "warnEvidence": "Upload at least one piece of evidence (photo or video) before sending.",
-    "warnNote": "Describe the work done before sending."
+    "warnNote": "Describe the work done before sending.",
+    "confirmReadyTitle": "Send for review?",
+    "confirmReadySub": "Make sure everything is complete.",
+    "confirmReadyBody": "The administrator will receive the ticket to review it. You won't be able to edit it until they approve it or send it back with corrections.",
+    "confirmReadyBtn": "Yes, send"
   },
   "public": {
     "reportLabel": "Technical work report",

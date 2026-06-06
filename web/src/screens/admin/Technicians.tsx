@@ -1,7 +1,7 @@
 /* © 2026 Aditum — Aditum FieldOps — Technicians management */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Icon, Avatar, Button, Modal, Field, Input, Toggle, toast, CredentialsCard } from '../../components/ui';
+import { Icon, Avatar, Button, Modal, Field, Input, Toggle, toast, CredentialsCard, confirmDialog } from '../../components/ui';
 import { PageHeader } from './AdminShell';
 import type { AppCtx } from '../../lib/ctx';
 
@@ -72,7 +72,7 @@ function TechFormModal({ open, tech, onClose, onSave }: any) {
           <Input icon="users" placeholder={t('technicians.namePlaceholder')} value={name} onChange={(e: any) => setName(e.target.value)} error={!!err.name} />
         </Field>
         <Field label={t('auth.email')} required error={err.email}>
-          <Input icon="mail" type="email" placeholder="jose.perez@aditum.cr" value={email} onChange={(e: any) => setEmail(e.target.value)} error={!!err.email} disabled={editing} />
+          <Input icon="mail" type="email" placeholder="jose.perez@aditum.cr" value={email} onChange={(e: any) => setEmail(e.target.value)} error={!!err.email} />
         </Field>
         <Field label={t('technicians.phone')} hint={t('common.optional')}>
           <Input icon="phone" placeholder="8888-8888" value={phone} onChange={(e: any) => setPhone(e.target.value)} />
@@ -95,9 +95,13 @@ export default function TechniciansScreen({ ctx, openCreate }: { ctx: AppCtx; op
 
   const onSave = async (data: any) => {
     if (data.id) {
-      await ctx.updateTechnician(data.id, { name: data.name, phone: data.phone });
-      toast(t('technicians.updated'), 'success');
-      setModal(null);
+      try {
+        await ctx.updateTechnician(data.id, { name: data.name, phone: data.phone, email: data.email } as any);
+        toast(t('technicians.updated'), 'success');
+        setModal(null);
+      } catch (e: any) {
+        toast(e?.message || 'Error', 'error');
+      }
     } else {
       try {
         await ctx.addTechnician({ name: data.name, email: data.email, phone: data.phone, password: data.password });
@@ -110,7 +114,8 @@ export default function TechniciansScreen({ ctx, openCreate }: { ctx: AppCtx; op
   };
 
   const onResetPassword = async (tech: any) => {
-    if (!confirm(t('technicians.resetPasswordConfirm', { name: tech.name }))) return;
+    const ok = await confirmDialog({ title: t('technicians.resetPassword'), message: t('technicians.resetPasswordConfirm', { name: tech.name }), confirmLabel: t('technicians.resetPassword'), confirmIcon: 'refresh' });
+    if (!ok) return;
     try {
       const { password } = await ctx.resetTechnicianPassword(tech.id);
       setCreds({ name: tech.name, email: tech.email, password, title: t('technicians.resetPasswordTitle'), sub: t('technicians.resetPasswordSub') });

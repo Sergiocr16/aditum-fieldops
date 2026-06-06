@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as XLSX from 'xlsx';
-import { Icon, Button, Input, Field, Modal, EmptyState, toast } from '../../components/ui';
+import { Icon, Button, Input, Field, Modal, EmptyState, toast, confirmDialog } from '../../components/ui';
 import { PageHeader } from './AdminShell';
 import { useInventory } from '../../lib/inventory';
 import type { AppCtx } from '../../lib/ctx';
@@ -181,7 +181,7 @@ export default function Inventory({ ctx }: { ctx: AppCtx }) {
                           <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'right' }}>
                             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                               <button className="icon-btn" title={t('common.edit')} onClick={() => setEdit({ ...i })}><Icon name="edit" size={16} /></button>
-                              <button className="icon-btn" style={{ color: 'var(--st-rech-fg)' }} title={t('common.delete')} onClick={() => { if (confirm(t('inventory.deleteConfirm'))) { inv.deleteItem(i.id); toast(t('inventory.deleted')); } }}><Icon name="trash" size={16} /></button>
+                              <button className="icon-btn" style={{ color: 'var(--st-rech-fg)' }} title={t('common.delete')} onClick={async () => { if (await confirmDialog({ title: t('common.delete'), message: t('inventory.deleteConfirm'), tone: 'danger', confirmLabel: t('common.delete'), confirmIcon: 'trash' })) { inv.deleteItem(i.id); toast(t('inventory.deleted')); } }}><Icon name="trash" size={16} /></button>
                             </div>
                           </td>
                         </tr>
@@ -225,7 +225,16 @@ export default function Inventory({ ctx }: { ctx: AppCtx }) {
                       <td className="mono" style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{m.at}</td>
                       <td style={{ fontWeight: 600 }}>{m.productName}</td>
                       <td><span className="tag">-{m.qty}</span></td>
-                      <td className="mono" style={{ color: 'var(--text-2)' }}>{m.ticketNum}</td>
+                      <td>
+                        <button
+                          className="mono"
+                          onClick={() => ctx.go('ticketDetail', { id: m.ticketId })}
+                          style={{ border: 'none', background: 'transparent', color: 'var(--navy-700)', fontWeight: 600, cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                        >
+                          {m.ticketNum}
+                          <Icon name="external" size={13} />
+                        </button>
+                      </td>
                       <td style={{ color: 'var(--text-2)' }}>{[m.client, m.site].filter(Boolean).join(' · ') || '—'}</td>
                       <td style={{ color: 'var(--text-2)' }}>{m.techName || '—'}</td>
                     </tr>
@@ -269,7 +278,10 @@ export default function Inventory({ ctx }: { ctx: AppCtx }) {
                 <div className="section-label" style={{ marginBottom: 8 }}>{t('inventory.productHistory')}</div>
                 {inv.movements.filter((m) => m.productId === edit.id).slice(0, 6).map((m) => (
                   <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '5px 0', borderBottom: '1px solid var(--border)' }}>
-                    <span style={{ color: 'var(--text-2)' }}>{m.ticketNum} · {[m.client, m.site].filter(Boolean).join(' · ')}</span>
+                    <span style={{ color: 'var(--text-2)' }}>
+                      <button onClick={() => { setEdit(null); ctx.go('ticketDetail', { id: m.ticketId }); }} className="mono" style={{ border: 'none', background: 'transparent', color: 'var(--navy-700)', fontWeight: 600, cursor: 'pointer', padding: 0 }}>{m.ticketNum}</button>
+                      {' · '}{[m.client, m.site].filter(Boolean).join(' · ')}
+                    </span>
                     <span><b>-{m.qty}</b> <span className="mono" style={{ color: 'var(--text-3)' }}>{(m.at || '').split(' ')[0]}</span></span>
                   </div>
                 ))}

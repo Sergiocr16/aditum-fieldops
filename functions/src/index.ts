@@ -59,13 +59,23 @@ export const createTechnician = onCall(async (req) => {
 
 export const updateTechnician = onCall(async (req) => {
   assertAdmin(req);
-  const { id, name, phone, active } = req.data || {};
+  const { id, name, phone, active, email } = req.data || {};
   if (!id) throw new HttpsError('invalid-argument', 'id is required.');
   const patch: any = { updatedAt: nowCR() };
   if (typeof name === 'string') {
     patch.name = name.trim();
     patch.initials = initialsOf(name);
     await admin.auth().updateUser(id, { displayName: name.trim() });
+  }
+  if (typeof email === 'string' && email.trim()) {
+    try {
+      await admin.auth().updateUser(id, { email: email.trim() });
+      patch.email = email.trim();
+    } catch (e: any) {
+      if (e.code === 'auth/email-already-exists') throw new HttpsError('already-exists', 'Ese correo ya está en uso por otro usuario.');
+      if (e.code === 'auth/invalid-email') throw new HttpsError('invalid-argument', 'Correo no válido.');
+      throw new HttpsError('internal', e.message || 'No se pudo actualizar el correo.');
+    }
   }
   if (typeof phone === 'string') patch.phone = phone;
   if (typeof active === 'boolean') {
