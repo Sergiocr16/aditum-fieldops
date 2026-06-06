@@ -1,0 +1,31 @@
+rules_version = '2';
+// © 2026 Aditum — Aditum FieldOps — Storage security rules
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn() { return request.auth != null; }
+    function isAdmin()  { return signedIn() && request.auth.token.role == 'admin'; }
+    function okImage()  { return request.resource.contentType.matches('image/(jpeg|png|webp)'); }
+    function okVideo()  { return request.resource.contentType.matches('video/(mp4|quicktime|webm)'); }
+    function okPdf()    { return request.resource.contentType == 'application/pdf'; }
+    function sizeOk()   { return request.resource.size < 200 * 1024 * 1024; } // 200MB hard cap
+
+    // Ticket evidence: any authenticated staff member can read; uploads must be valid media.
+    // (Per-ticket assignment is enforced by the app + Firestore rules; public access is via
+    //  signed/token URLs returned by the getPublicTicket function only.)
+    match /tickets/{ticketId}/{allPaths=**} {
+      allow read:  if signedIn();
+      allow write: if signedIn() && sizeOk() && (okImage() || okVideo() || okPdf());
+    }
+
+    // Wiki media: staff can read; only admins can upload.
+    match /wiki/{allPaths=**} {
+      allow read:  if signedIn();
+      allow write: if isAdmin() && sizeOk() && (okImage() || okVideo() || okPdf());
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

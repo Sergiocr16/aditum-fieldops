@@ -1,0 +1,195 @@
+/* © 2026 Aditum — Aditum FieldOps — Technicians management */
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Icon, Avatar, Button, Modal, Field, Input, Toggle, toast, CredentialsCard } from '../../components/ui';
+import { PageHeader } from './AdminShell';
+import type { AppCtx } from '../../lib/ctx';
+
+export function genPassword() {
+  const a = 'ABCDEFGHJKMNPQRSTUVWXYZ',
+    b = 'abcdefghijkmnpqrstuvwxyz',
+    n = '23456789';
+  const r = new Uint32Array(8);
+  crypto.getRandomValues(r);
+  const pick = (s: string, i: number) => s[r[i] % s.length];
+  return pick(a, 0) + pick(b, 1) + pick(b, 2) + pick(b, 3) + pick(n, 4) + pick(n, 5) + pick('@#$%', 6) + pick(n, 7);
+}
+
+function TechFormModal({ open, tech, onClose, onSave }: any) {
+  const { t } = useTranslation();
+  const editing = !!tech;
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [pass, setPass] = useState('');
+  const [err, setErr] = useState<any>({});
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (open) {
+      setName(tech?.name || '');
+      setEmail(tech?.email || '');
+      setPhone(tech?.phone || '');
+      setPass(editing ? '' : genPassword());
+      setErr({});
+      setSaving(false);
+    }
+  }, [open, tech]);
+
+  const save = async () => {
+    const e: any = {};
+    if (!name.trim()) e.name = t('technicians.errName');
+    if (!email.trim()) e.email = t('technicians.errEmail');
+    else if (!/.+@.+\..+/.test(email)) e.email = t('technicians.errEmailInvalid');
+    if (!editing && !pass.trim()) e.pass = t('technicians.errPass');
+    setErr(e);
+    if (Object.keys(e).length) return;
+    setSaving(true);
+    try {
+      await onSave({ id: tech?.id, name: name.trim(), email: email.trim(), phone: phone.trim(), password: pass });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      width={460}
+      title={editing ? t('technicians.edit') : t('technicians.create')}
+      sub={editing ? t('technicians.editSub') : t('technicians.createSub')}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button variant="primary" icon={editing ? 'check' : 'plus'} onClick={save} disabled={saving}>
+            {editing ? t('common.saveChanges') : t('technicians.create')}
+          </Button>
+        </>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+        <Field label={t('technicians.fullName')} required error={err.name}>
+          <Input icon="users" placeholder={t('technicians.namePlaceholder')} value={name} onChange={(e: any) => setName(e.target.value)} error={!!err.name} />
+        </Field>
+        <Field label={t('auth.email')} required error={err.email}>
+          <Input icon="mail" type="email" placeholder="jose.perez@aditum.cr" value={email} onChange={(e: any) => setEmail(e.target.value)} error={!!err.email} disabled={editing} />
+        </Field>
+        <Field label={t('technicians.phone')} hint={t('common.optional')}>
+          <Input icon="phone" placeholder="8888-8888" value={phone} onChange={(e: any) => setPhone(e.target.value)} />
+        </Field>
+        {/* La contraseña se genera automáticamente y se muestra en la tarjeta de credenciales al crear. */}
+      </div>
+    </Modal>
+  );
+}
+
+export default function TechniciansScreen({ ctx, openCreate }: { ctx: AppCtx; openCreate?: boolean }) {
+  const { t } = useTranslation();
+  const [modal, setModal] = useState<any>(null);
+  const [creds, setCreds] = useState<any>(null);
+  useEffect(() => {
+    if (openCreate) setModal({ tech: null });
+  }, [openCreate]);
+
+  const techs = ctx.db.technicians;
+
+  const onSave = async (data: any) => {
+    if (data.id) {
+      await ctx.updateTechnician(data.id, { name: data.name, phone: data.phone });
+      toast(t('technicians.updated'), 'success');
+      setModal(null);
+    } else {
+      try {
+        await ctx.addTechnician({ name: data.name, email: data.email, phone: data.phone, password: data.password });
+        setModal(null);
+        setCreds({ name: data.name, email: data.email, password: data.password, title: t('technicians.created'), sub: t('technicians.createdSub') });
+      } catch (e: any) {
+        toast(e?.message || 'Error', 'error');
+      }
+    }
+  };
+
+  const onResetPassword = async (tech: any) => {
+    if (!confirm(t('technicians.resetPasswordConfirm', { name: tech.name }))) return;
+    try {
+      const { password } = await ctx.resetTechnicianPassword(tech.id);
+      setCreds({ name: tech.name, email: tech.email, password, title: t('technicians.resetPasswordTitle'), sub: t('technicians.resetPasswordSub') });
+      toast(t('technicians.passwordReset'), 'success');
+    } catch (e: any) {
+      toast(e?.message || 'Error', 'error');
+    }
+  };
+
+  return (
+    <div className="fade-in">
+      <PageHeader
+        title={t('technicians.title')}
+        sub={t('technicians.sub', { active: techs.filter((x) => x.active).length, total: techs.length })}
+        action={<Button variant="primary" icon="plus" onClick={() => setModal({ tech: null })}>{t('technicians.create')}</Button>}
+      />
+
+      <div className="card" style={{ overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>{t('technicians.colName')}</th>
+                <th>{t('technicians.colEmail')}</th>
+                <th>{t('technicians.colPhone')}</th>
+                <th>{t('technicians.colStatus')}</th>
+                <th>{t('technicians.colCreated')}</th>
+                <th style={{ textAlign: 'right' }}>{t('technicians.colActions')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {techs.map((tech) => (
+                <tr key={tech.id}>
+                  <td>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                      <Avatar initials={tech.initials} size={32} />
+                      <span style={{ fontWeight: 600 }}>{tech.name}</span>
+                    </span>
+                  </td>
+                  <td style={{ color: 'var(--text-2)' }} className="mono-sm">{tech.email}</td>
+                  <td style={{ color: 'var(--text-2)' }}>{tech.phone || '—'}</td>
+                  <td>
+                    <span className={'badge sm ' + (tech.active ? 'bg-apro' : 'bg-cerr')}>
+                      <span className="dot" />
+                      {tech.active ? t('technicians.active') : t('technicians.inactive')}
+                    </span>
+                  </td>
+                  <td className="mono" style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{(tech.createdAt || '').split(' ')[0] || '—'}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+                      <button className="icon-btn" title={t('common.edit')} onClick={() => setModal({ tech })}>
+                        <Icon name="edit" size={16} />
+                      </button>
+                      <button className="icon-btn" title={t('technicians.resetPassword')} onClick={() => onResetPassword(tech)}>
+                        <Icon name="lock" size={16} />
+                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, paddingLeft: 6, borderLeft: '1px solid var(--border)' }}>
+                        <Toggle
+                          on={tech.active}
+                          onClick={async () => {
+                            await ctx.updateTechnician(tech.id, { active: !tech.active });
+                            toast(tech.active ? t('technicians.deactivated') : t('technicians.activated'));
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <TechFormModal open={!!modal} tech={modal?.tech} onClose={() => setModal(null)} onSave={onSave} />
+
+      <Modal open={!!creds} onClose={() => setCreds(null)} width={420} title={t('technicians.created')} sub={t('technicians.createdSub')} tone="success" footer={<Button variant="primary" block onClick={() => setCreds(null)}>{t('common.understood')}</Button>}>
+        {creds && <CredentialsCard name={creds.name} email={creds.email} password={creds.password} />}
+      </Modal>
+    </div>
+  );
+}

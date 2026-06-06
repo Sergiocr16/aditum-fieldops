@@ -1,0 +1,9 @@
+{
+  "name": "aditum-fieldops-seed",
+  "version": "1.0.0",
+  "description": "Aditum FieldOps — seed admin + demo data. © Aditum.",
+  "type": "module",
+  "private": true,
+  "scripts": { "seed": "node seed.mjs" },
+  "dependencies": { "firebase-admin": "^12.6.0" }
+}

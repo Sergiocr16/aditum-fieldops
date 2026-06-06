@@ -1,0 +1,57 @@
+rules_version = '2';
+// © 2026 Aditum — Aditum FieldOps — Firestore security rules
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn()  { return request.auth != null; }
+    function isAdmin()   { return signedIn() && request.auth.token.role == 'admin'; }
+    function isTech()    { return signedIn() && request.auth.token.role == 'tech'; }
+    function myUid()     { return request.auth.uid; }
+
+    // ---------- users ----------
+    // Reads: admin reads everyone; a user reads only their own profile.
+    // Writes: only via Cloud Functions (Admin SDK bypasses rules) — never from the client.
+    match /users/{uid} {
+      allow read: if isAdmin() || (signedIn() && uid == myUid());
+      allow write: if false;
+    }
+
+    // ---------- ticket counter ----------
+    match /counters/{doc} {
+      allow read, write: if isAdmin();
+    }
+
+    // ---------- tickets ----------
+    match /tickets/{id} {
+      allow read:   if isAdmin() || (isTech() && resource.data.techId == myUid());
+      allow create: if isAdmin();
+      allow delete: if isAdmin();
+      // Admin can update anything. Technician can update only their own ticket while it's
+      // in an editable state, and cannot reassign it or jump to admin-only statuses.
+      allow update: if isAdmin() || (
+        isTech()
+        && resource.data.techId == myUid()
+        && request.resource.data.techId == resource.data.techId
+        && resource.data.status in ['asignado','pendiente','en_proceso','rechazado']
+        && request.resource.data.status in ['asignado','pendiente','en_proceso','rechazado','listo_revision']
+      );
+    }
+
+    // ---------- wiki categories ----------
+    match /wikiCategories/{id} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // ---------- wiki pages ----------
+    match /wikiPages/{id} {
+      // Admin sees all; technicians only published pages.
+      allow read:  if isAdmin() || (isTech() && resource.data.status == 'PUBLISHED');
+      allow write: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
