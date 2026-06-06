@@ -1,9 +1,11 @@
 /* © 2026 Aditum — Aditum FieldOps — Technician mobile ticket detail (on site) */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Icon, StatusBadge, PriorityChip, Field, Textarea, Input, Select, Button, Stepper, Modal, Lightbox, EvidenceThumb, toast } from '../../components/ui';
+import { Icon, StatusBadge, PriorityChip, Field, Textarea, Input, Select, Button, Stepper, Modal, Lightbox, EvidenceThumb, toast, confirmDialog } from '../../components/ui';
 import { MobileHeader } from './MobileDashboard';
 import Uploader from '../../components/Uploader';
+import { ref as storageRef, deleteObject } from 'firebase/storage';
+import { storage } from '../../lib/firebase';
 import { useInventory } from '../../lib/inventory';
 import { now } from '../../lib/time';
 import type { AppCtx } from '../../lib/ctx';
@@ -75,6 +77,20 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
   };
   const removeMaterial = (idx: number) => persistMaterials(materials.filter((_, i) => i !== idx), matNote);
   const setMaterialQty = (idx: number, qty: number) => persistMaterials(materials.map((m, i) => (i === idx ? { ...m, qty: Math.max(1, qty) } : m)), matNote);
+  const removeEvidence = async (idx: number) => {
+    const ev = tk.evidence[idx];
+    const okc = await confirmDialog({ title: t('mobile.removeEvidence'), message: t('mobile.removeEvidenceConfirm'), tone: 'danger', confirmLabel: t('common.delete'), confirmIcon: 'trash' });
+    if (!okc) return;
+    await ctx.updateTicket(id, { evidence: tk.evidence.filter((_, i) => i !== idx) });
+    if (ev?.path) {
+      try {
+        await deleteObject(storageRef(storage, ev.path));
+      } catch {
+        /* archivo ya no existe o sin permiso: la evidencia igual se quitó del ticket */
+      }
+    }
+    toast(t('mobile.evidenceRemoved'));
+  };
   const requestReady = () => {
     ctx.updateTicket(id, { techNote: note, techObs: obs, materials, materialsNote: matNote });
     if (!allDone) {
@@ -252,6 +268,15 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
               {tk.evidence.map((ev, i) => (
                 <div key={i} style={{ position: 'relative' }}>
                   <EvidenceThumb src={ev.file} type={ev.type} onClick={() => setLb(i)} h={88} />
+                  {canEdit && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); removeEvidence(i); }}
+                      aria-label={t('mobile.removeEvidence')}
+                      style={{ position: 'absolute', top: 4, right: 4, width: 26, height: 26, borderRadius: '50%', border: 'none', background: 'rgba(0,30,47,.78)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,.3)' }}
+                    >
+                      <Icon name="x" size={15} />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

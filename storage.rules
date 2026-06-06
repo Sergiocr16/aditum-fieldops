@@ -14,14 +14,16 @@ service firebase.storage {
     // (Per-ticket assignment is enforced by the app + Firestore rules; public access is via
     //  signed/token URLs returned by the getPublicTicket function only.)
     match /tickets/{ticketId}/{allPaths=**} {
-      allow read:  if signedIn();
-      allow write: if signedIn() && sizeOk() && (okImage() || okVideo() || okPdf());
+      allow read:           if signedIn();
+      allow create, update: if signedIn() && sizeOk() && (okImage() || okVideo() || okPdf());
+      allow delete:         if signedIn();
     }
 
-    // Wiki media: staff can read; only admins can upload.
+    // Wiki media: staff can read; only admins can upload/borrar.
     match /wiki/{allPaths=**} {
-      allow read:  if signedIn();
-      allow write: if isAdmin() && sizeOk() && (okImage() || okVideo() || okPdf());
+      allow read:           if signedIn();
+      allow create, update: if isAdmin() && sizeOk() && (okImage() || okVideo() || okPdf());
+      allow delete:         if isAdmin();
     }
 
     match /{allPaths=**} {
