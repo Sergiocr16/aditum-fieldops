@@ -227,8 +227,9 @@ export default function PublicView() {
         )}
 
         <div style={{ textAlign: 'center', paddingTop: 24, borderTop: '1px solid var(--border)', marginTop: 10 }}>
-          <Logo height={24} />
-          <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '10px 0 4px' }}>{t('public.footer')}</p>
+          <Logo height={28} />
+          <p style={{ fontSize: 14, color: 'var(--navy-700)', fontWeight: 700, margin: '12px 0 4px' }}>{t('brand.developedBy')}</p>
+          <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '0 0 4px' }}>{t('public.footer')}</p>
           <p style={{ fontSize: 11.5, color: 'var(--text-3)', margin: 0 }}>{t('copyright', { year: new Date().getFullYear() })}</p>
         </div>
       </div>

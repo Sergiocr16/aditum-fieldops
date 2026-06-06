@@ -1,5 +1,5 @@
 {
-  "brand": { "name": "Aditum FieldOps", "tagline": "On-site technical work management" },
+  "brand": { "name": "Aditum FieldOps", "tagline": "On-site technical work management", "developedBy": "Developed by Aditum" },
   "common": {
     "save": "Save",
     "saveChanges": "Save changes",

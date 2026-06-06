@@ -77,6 +77,7 @@ export default function AdminShell({ ctx, route, children }: { ctx: AppCtx; rout
               <Icon name="logout" size={16} />
             </button>
           </div>
+          <div style={{ textAlign: 'center', fontSize: 10.5, color: 'rgba(238,243,247,.35)', marginTop: 8 }}>{t('brand.developedBy')}</div>
         </div>
       </aside>
 

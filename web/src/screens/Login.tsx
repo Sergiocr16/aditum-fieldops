@@ -52,7 +52,8 @@ export default function Login() {
         </div>
         <div style={{ position: 'relative', fontSize: 12.5, color: 'rgba(238,243,247,.55)', display: 'flex', flexDirection: 'column', gap: 3 }}>
           <span>{t('auth.heroMeta')} · Costa Rica</span>
-          <span style={{ color: 'rgba(238,243,247,.4)' }}>© {new Date().getFullYear()} Aditum · Aditum FieldOps</span>
+          <span style={{ color: 'var(--gold)', fontWeight: 600 }}>{t('brand.developedBy')}</span>
+          <span style={{ color: 'rgba(238,243,247,.4)' }}>© {new Date().getFullYear()} Aditum FieldOps</span>
         </div>
       </div>
 

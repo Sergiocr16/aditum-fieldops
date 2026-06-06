@@ -1,5 +1,5 @@
 {
-  "brand": { "name": "Aditum FieldOps", "tagline": "Gestión de trabajo técnico en sitio" },
+  "brand": { "name": "Aditum FieldOps", "tagline": "Gestión de trabajo técnico en sitio", "developedBy": "Desarrollado por Aditum" },
   "common": {
     "save": "Guardar",
     "saveChanges": "Guardar cambios",
