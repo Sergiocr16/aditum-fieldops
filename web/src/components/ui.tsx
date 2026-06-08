@@ -100,7 +100,7 @@ export function Logo({ variant = 'horizontal', height = 30, withLockup = true, l
           }}
         >
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: Math.max(4, Math.round(height * 0.16)), fontWeight: 700, fontSize: height * 0.55, letterSpacing: '-.01em', color: 'var(--gold-600)', lineHeight: 1 }}>
-            <Icon name="zap" size={Math.round(height * 0.5)} fill="var(--gold-600)" stroke={1.5} style={{ overflow: 'visible' }} />
+            <img src="/service-icon.png" alt="" style={{ height: Math.round(height * 0.78), width: 'auto', display: 'block' }} />
             Service
           </span>
         </span>

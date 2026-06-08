@@ -34,3 +34,6 @@ ui-debug.log
 
 # build info
 *.tsbuildinfo
+
+# carpeta fuente del icono (los usados están en web/public)
+icono_field_ops/
