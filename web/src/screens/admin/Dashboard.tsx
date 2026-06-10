@@ -1,7 +1,7 @@
 /* © 2026 Aditum — Aditum FieldOps — Admin dashboard */
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Icon, Avatar, StatusBadge, PriorityChip, SOStatusBadge } from '../../components/ui';
+import { Icon, Avatar, Button, StatusBadge, PriorityChip, SOStatusBadge } from '../../components/ui';
 import { STATUS, statusCounts, SO_ACTIVE_STATUSES } from '../../lib/config';
 import { useServiceOrdersRange, useBillingOrders } from '../../lib/serviceOrders';
 import { useContracts } from '../../lib/contracts';
@@ -11,51 +11,50 @@ import { today } from '../../lib/time';
 import { CorrectiveModal } from './ServiceOrders';
 import { canSeeModule } from '../../lib/modules';
 import { useAuth } from '../../lib/auth';
+import { ChartCard, ChartEmpty, DonutChart, CategoryBars, StackedBars, TrendChart, Sparkline } from '../../components/charts';
+import * as A from '../../lib/analytics';
+import { PERIODS, type PeriodKey } from '../../lib/analytics';
+import { PRIORITY_COLOR } from '../../lib/config';
+import { formatDate } from '../../lib/time';
 import type { AppCtx } from '../../lib/ctx';
 import type { ServiceOrder } from '../../lib/types';
 
-const BADGE_COLORS: Record<string, [string, string, string]> = {
-  pend: ['#eef0f3', '#54606e', '#8a93a1'],
-  asig: ['#e6f0fb', '#1f5fa8', '#2f7ad1'],
-  proc: ['#fdf2e0', '#a96a12', '#e0911f'],
-  revi: ['#f0e9fb', '#6b3fb5', '#8b5cf0'],
-  apro: ['#e4f6ec', '#1f7a47', '#27a35a'],
-  rech: ['#fdeaea', '#bb2d2d', '#e04545'],
-  cerr: ['#e7ebef', '#3a4654', '#56636f'],
-};
-const METRIC_ICON: Record<string, string> = { total: 'ticket', pend: 'clock', asig: 'users', proc: 'wrench', revi: 'eye', apro: 'checkCircle', rech: 'alert', cerr: 'lock' };
+const SERIES_COLORS = { preventivo: '#27a35a', correctivo: '#e0911f', creados: '#2f7ad1', resueltos: '#27a35a', cumplimiento: '#8b5cf0', facturado: '#27a35a', pendiente: '#e0911f' };
+const DOT = { pend: '#8a93a1', asig: '#2f7ad1', proc: '#e0911f', revi: '#8b5cf0', apro: '#27a35a', rech: '#e04545', cerr: '#56636f' };
+const NAVY = '#002A42', GOLD = '#DEB66E';
 
-function MetricCard({ cls, label, count, big }: any) {
-  const { t } = useTranslation();
-  if (big) {
-    return (
-      <div className="card card-pad" style={{ background: 'var(--navy-800)', border: 'none', color: '#fff', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 118, position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', right: -10, top: -10, opacity: 0.12, color: 'var(--gold)' }}>
-          <Icon name="ticket" size={92} />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,.7)' }}>{label}</div>
-        <div style={{ fontSize: 38, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1 }}>{count}</div>
-        <div style={{ fontSize: 12, color: 'var(--gold)' }}>{t('dashboard.inWholeSystem')}</div>
-      </div>
-    );
-  }
-  const [bg, fg, dot] = BADGE_COLORS[cls];
+/** KPI tile — una sola vocabulary para todo el dashboard. */
+function Kpi({ label, value, suffix, dot, accent, spark, sparkColor, onClick }: {
+  label: string; value: string | number; suffix?: string; dot?: string; accent?: boolean;
+  spark?: { value: number }[]; sparkColor?: string; onClick?: () => void;
+}) {
   return (
-    <div className="card card-pad metric" style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 118 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ width: 34, height: 34, borderRadius: 9, background: bg, color: fg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name={METRIC_ICON[cls]} size={18} />
-        </span>
-        <span style={{ width: 8, height: 8, borderRadius: '50%', background: dot }} />
+    <div className={'kpi' + (accent ? ' kpi--accent' : '') + (onClick ? ' kpi--link' : '')} onClick={onClick}>
+      <div className="kpi-top">
+        <span className="kpi-label">{label}</span>
+        {dot && !accent && <span className="kpi-dot" style={{ background: dot }} />}
       </div>
-      <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1, color: 'var(--text)' }}>{count}</div>
-      <div style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 500 }}>{label}</div>
+      <div className="kpi-foot">
+        <div className="kpi-val">{value}{suffix && <span className="u">{suffix}</span>}</div>
+        {spark && spark.length > 1 && <div style={{ width: 84 }}><Sparkline data={spark} color={sparkColor || (accent ? GOLD : NAVY)} height={30} /></div>}
+      </div>
+    </div>
+  );
+}
+
+function SecHead({ title, meta }: { title: string; meta?: React.ReactNode }) {
+  return (
+    <div className="sec-head">
+      <span className="bar" />
+      <h2>{title}</h2>
+      <span className="rule" />
+      {meta && <span className="meta">{meta}</span>}
     </div>
   );
 }
 
 export default function AdminDashboard({ ctx }: { ctx: AppCtx }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   // El dashboard refleja los módulos visibles del usuario.
   const sees = (m: string) => canSeeModule(m, user?.role, user?.modules);
@@ -71,8 +70,38 @@ export default function AdminDashboard({ ctx }: { ctx: AppCtx }) {
   const range = useMemo(() => ({ from: addDays(d, -30), to: addDays(d, 7) }), [d]);
   const { orders } = useServiceOrdersRange(range.from, range.to);
   const { items: pendingBilling } = useBillingOrders('pendiente');
+  const { items: invoicedBilling } = useBillingOrders('facturado');
   const { contracts } = useContracts();
   const inv = useInventory();
+
+  /* ---- analítica: ventana más amplia para tendencias (según período) ---- */
+  const lang = i18n.language;
+  const [period, setPeriod] = useState<PeriodKey>('90d');
+  const P = PERIODS.find((p) => p.key === period)!;
+  const analyticsRange = useMemo(() => ({ from: addDays(d, -P.days), to: addDays(d, 7) }), [d, P.days]);
+  const { orders: anOrders } = useServiceOrdersRange(analyticsRange.from, analyticsRange.to);
+  const periodTickets = useMemo(() => tickets.filter((t) => (t.created || '').slice(0, 10) >= analyticsRange.from), [tickets, analyticsRange.from]);
+
+  // gráficos de tickets
+  const chTicketStatus = useMemo(() => A.ticketsByStatus(tickets), [tickets]);
+  const chTicketPriority = useMemo(() => A.ticketsByPriority(tickets), [tickets]);
+  const chTicketTrend = useMemo(() => A.createdVsResolvedByWeek(periodTickets, P.weeks, d), [periodTickets, P.weeks, d]);
+  const chTicketTech = useMemo(() => A.ticketsByTech(tickets, ctx.db.technicians), [tickets, ctx.db.technicians]);
+  const kAvgRes = useMemo(() => A.avgResolutionDays(tickets), [tickets]);
+  const kFirstPass = useMemo(() => A.firstPassRate(tickets), [tickets]);
+
+  // gráficos de mantenimiento
+  const chSoStatus = useMemo(() => A.soByStatus(anOrders), [anOrders]);
+  const chPrevCorr = useMemo(() => A.preventiveVsCorrectiveByMonth(anOrders, P.months, d, lang), [anOrders, P.months, d, lang]);
+  const chCompliance = useMemo(() => A.complianceByMonth(anOrders, P.months, d, lang), [anOrders, P.months, d, lang]);
+  const chSoType = useMemo(() => A.soByEquipmentType(anOrders), [anOrders]);
+  const chSoTech = useMemo(() => A.soByTech(anOrders, ctx.db.technicians), [anOrders, ctx.db.technicians]);
+  const kPrevRate = useMemo(() => A.preventiveRate(anOrders), [anOrders]);
+  const sparkSoDone = useMemo(() => A.soDoneByWeek(anOrders, P.weeks, d), [anOrders, P.weeks, d]);
+
+  // facturación
+  const chBilling = useMemo(() => A.billingByMonth(pendingBilling, invoicedBilling, P.months, d, lang), [pendingBilling, invoicedBilling, P.months, d, lang]);
+  const facturadoMes = useMemo(() => invoicedBilling.filter((i) => monthOf(i.invoicedAt || i.serviceDate) === monthOf(d)).length, [invoicedBilling, d]);
   const [correctiveOpen, setCorrectiveOpen] = useState(false);
 
   const isActive = (o: ServiceOrder) => SO_ACTIVE_STATUSES.includes(o.status);
@@ -128,192 +157,233 @@ export default function AdminDashboard({ ctx }: { ctx: AppCtx }) {
 
   const techName = (id: string | null) => ctx.db.technicians.find((x) => x.id === id)?.name?.split(' ')[0] || '—';
 
+  const greeting = ctx.admin.name?.split(' ')[0] || '';
+
   return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-        {showTickets && (
-          <button onClick={() => ctx.go('ticketForm', { mode: 'new' })} className="quick-action quick-gold">
-            <span className="qa-ico" style={{ background: 'var(--gold)', color: 'var(--navy-900)' }}>
-              <Icon name="plus" size={22} />
-            </span>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>{t('dashboard.createTicket')}</div>
-              <div style={{ fontSize: 12.5, opacity: 0.65 }}>{t('dashboard.createTicketSub')}</div>
+    <div className="dash fade-in">
+      {/* ---------- header band ---------- */}
+      <div className="dash-head">
+        <div>
+          <div className="dash-eyebrow">{formatDate(d, lang)}</div>
+          <div className="dash-title">{t('dashboard.greeting')}{greeting ? ', ' + greeting : ''}</div>
+        </div>
+        <div className="dash-tools">
+          {(showMaintenance || showTickets || showBilling) && (
+            <div className="seg" role="tablist" aria-label={t('dashboard.charts.period')}>
+              {PERIODS.map((p) => (
+                <button key={p.key} className={period === p.key ? 'on' : ''} onClick={() => setPeriod(p.key)}>
+                  {t('dashboard.charts.period_' + p.key)}
+                </button>
+              ))}
             </div>
-            <Icon name="chevronRight" size={18} style={{ marginLeft: 'auto', opacity: 0.5 }} />
-          </button>
-        )}
-        {showMaintenance && (
-          <button onClick={() => setCorrectiveOpen(true)} className="quick-action">
-            <span className="qa-ico" style={{ background: 'var(--st-proc-bg)', color: 'var(--st-proc-fg)' }}>
-              <Icon name="zap" size={20} />
-            </span>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>{t('serviceOrders.newCorrective')}</div>
-              <div style={{ fontSize: 12.5, color: 'var(--text-3)' }}>{t('dashboard.correctiveSub')}</div>
-            </div>
-            <Icon name="chevronRight" size={18} style={{ marginLeft: 'auto', color: 'var(--text-3)' }} />
-          </button>
-        )}
-        {sees('technicians') && (
-          <button onClick={() => ctx.go('technicians', { create: true })} className="quick-action">
-            <span className="qa-ico" style={{ background: 'var(--navy-800)', color: '#fff' }}>
-              <Icon name="users" size={20} />
-            </span>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>{t('dashboard.createTech')}</div>
-              <div style={{ fontSize: 12.5, color: 'var(--text-3)' }}>{t('dashboard.createTechSub')}</div>
-            </div>
-            <Icon name="chevronRight" size={18} style={{ marginLeft: 'auto', color: 'var(--text-3)' }} />
-          </button>
-        )}
+          )}
+          {showTickets && <Button variant="gold" icon="plus" onClick={() => ctx.go('ticketForm', { mode: 'new' })}>{t('dashboard.createTicket')}</Button>}
+          {showMaintenance && <Button variant="ghost" icon="zap" onClick={() => setCorrectiveOpen(true)}>{t('serviceOrders.newCorrective')}</Button>}
+        </div>
       </div>
 
       {/* ---------- mantenimiento ---------- */}
       {showMaintenance && (
-      <div>
-        <div className="section-label">{t('dashboard.maintenanceTitle')}</div>
-        <div className="metric-grid">
-          <MetricCard cls="asig" label={t('dashboard.visitsToday')} count={kpi.hoy} />
-          <MetricCard cls="proc" label={t('dashboard.visitsWeek')} count={kpi.semana} />
-          <MetricCard cls="rech" label={t('dashboard.overdue')} count={kpi.vencidas} />
-          <MetricCard cls="revi" label={t('dashboard.unconfirmed')} count={kpi.sinConfirmar} />
-          {showBilling && (
-            <div onClick={() => ctx.go('billing')} style={{ cursor: 'pointer' }}>
-              <MetricCard cls="apro" label={t('dashboard.pendingBilling')} count={pendingBilling.length} />
+        <section className="dash-section">
+          <SecHead title={t('dashboard.maintenanceTitle')} meta={t('dashboard.charts.preventiveRate') + ': ' + (kPrevRate === null ? '—' : kPrevRate + '%')} />
+          <div className="kpi-row">
+            <Kpi accent label={t('dashboard.monthCompliance')} value={kpi.cumplimiento === null ? '—' : kpi.cumplimiento} suffix={kpi.cumplimiento === null ? '' : '%'} spark={sparkSoDone} />
+            <Kpi label={t('dashboard.visitsToday')} value={kpi.hoy} dot={DOT.asig} />
+            <Kpi label={t('dashboard.visitsWeek')} value={kpi.semana} dot={DOT.proc} />
+            <Kpi label={t('dashboard.overdue')} value={kpi.vencidas} dot={DOT.rech} />
+            <Kpi label={t('dashboard.unconfirmed')} value={kpi.sinConfirmar} dot={DOT.revi} />
+          </div>
+
+          <div className="bento">
+            <div className="col-4">
+              <ChartCard title={t('dashboard.charts.soStatus')} height={210}>
+                {chSoStatus.length ? <DonutChart data={chSoStatus.map((x) => ({ ...x, label: t('soStatus.' + x.key) }))} totalLabel={t('dashboard.charts.orders')} /> : <ChartEmpty label={t('dashboard.charts.empty')} />}
+              </ChartCard>
             </div>
-          )}
-          <MetricCard cls="cerr" label={t('dashboard.monthCompliance')} count={kpi.cumplimiento === null ? '—' : kpi.cumplimiento + '%'} />
-        </div>
-      </div>
+            <div className="col-8">
+              <ChartCard title={t('dashboard.charts.compliance')} sub={t('dashboard.charts.byMonth')} height={210}>
+                {anOrders.length ? <TrendChart data={chCompliance} kind="line" suffix="%" series={[{ key: 'cumplimiento', label: t('dashboard.monthCompliance'), color: SERIES_COLORS.cumplimiento }]} /> : <ChartEmpty label={t('dashboard.charts.empty')} />}
+              </ChartCard>
+            </div>
+            <div className="col-4">
+              <ChartCard title={t('dashboard.charts.prevCorr')} sub={t('dashboard.charts.byMonth')} height={200}>
+                {anOrders.length ? <StackedBars data={chPrevCorr} series={[{ key: 'preventivo', label: t('serviceOrders.type_preventivo'), color: SERIES_COLORS.preventivo }, { key: 'correctivo', label: t('serviceOrders.type_correctivo'), color: SERIES_COLORS.correctivo }]} /> : <ChartEmpty label={t('dashboard.charts.empty')} />}
+              </ChartCard>
+            </div>
+            <div className="col-4">
+              <ChartCard title={t('dashboard.charts.soByType')} height={200}>
+                {chSoType.length ? <CategoryBars data={chSoType} horizontal color="#1f5fa8" /> : <ChartEmpty label={t('dashboard.charts.empty')} />}
+              </ChartCard>
+            </div>
+            <div className="col-4">
+              <ChartCard title={t('dashboard.charts.soByTech')} height={200}>
+                {chSoTech.length ? <CategoryBars data={chSoTech} horizontal color="#002A42" /> : <ChartEmpty label={t('dashboard.charts.empty')} />}
+              </ChartCard>
+            </div>
+          </div>
+
+          <div className="bento">
+            <div className={alerts.length ? 'col-8' : 'col-12'}>
+              <div className="panel">
+                <div className="panel-head">
+                  <h3>{t('dashboard.upcomingVisits')}</h3>
+                  <button className="link-more" onClick={() => ctx.go('calendar')}>{t('dashboard.viewCalendar')} <Icon name="chevronRight" size={15} /></button>
+                </div>
+                {upcoming.length === 0 ? (
+                  <div style={{ padding: '22px 20px', fontSize: 13.5, color: 'var(--text-3)' }}>{t('dashboard.noUpcoming')}</div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="data-table">
+                      <tbody>
+                        {upcoming.map((o) => (
+                          <tr key={o.id} onClick={() => ctx.go('soDetail', { id: o.id })} style={{ cursor: 'pointer' }}>
+                            <td className="mono" style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>
+                              <b>{o.scheduledDate === d ? t('dashboard.todayShort') : o.scheduledDate.slice(5)}</b> {o.scheduledTime}
+                            </td>
+                            <td style={{ fontWeight: 600 }}>{o.equipmentSnapshot?.typeName || o.num}</td>
+                            <td style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{o.client?.name}</td>
+                            <td style={{ fontSize: 12.5 }}>{techName(o.techId)}</td>
+                            <td><SOStatusBadge status={o.status} size="sm" /></td>
+                            <td><Icon name="chevronRight" size={15} style={{ color: 'var(--text-3)' }} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {alerts.length > 0 && (
+              <div className="col-4">
+                <div className="panel">
+                  <div className="panel-head">
+                    <h3><Icon name="alert" size={16} style={{ color: 'var(--st-rech-fg)' }} /> {t('dashboard.alerts')}</h3>
+                    <span className="badge" style={{ background: 'var(--st-rech-bg)', color: 'var(--st-rech-fg)' }}>{alerts.length}</span>
+                  </div>
+                  {alerts.map((a, i) => (
+                    <button key={i} className="alert-row" onClick={a.go} style={i === 0 ? { borderTop: 'none' } : undefined}>
+                      <span style={{ width: 30, height: 30, borderRadius: 8, flex: 'none', background: `var(--st-${a.tone}-bg)`, color: `var(--st-${a.tone}-fg)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Icon name={a.icon} size={15} />
+                      </span>
+                      <span style={{ minWidth: 0 }}>
+                        <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600 }}>{a.text}</span>
+                        <span style={{ display: 'block', fontSize: 12, color: 'var(--text-3)' }} className="truncate">{a.sub}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
       )}
 
-      {showMaintenance && (
-      <div style={{ display: 'grid', gridTemplateColumns: alerts.length ? '1.4fr 1fr' : '1fr', gap: 16, alignItems: 'start' }}>
-        <div className="card" style={{ overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)' }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>{t('dashboard.upcomingVisits')}</div>
-            <button onClick={() => ctx.go('calendar')} style={{ border: 'none', background: 'transparent', color: 'var(--navy-700)', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-              {t('dashboard.viewCalendar')} <Icon name="chevronRight" size={15} />
-            </button>
+      {/* ---------- facturación (sección propia: facturación-only la ve) ---------- */}
+      {showBilling && (
+        <section className="dash-section">
+          <SecHead title={t('billing.nav')} />
+          <div className="bento">
+            <div className="col-4">
+              <div className="kpi-row" style={{ gridTemplateColumns: '1fr' }}>
+                <Kpi accent label={t('dashboard.pendingBilling')} value={pendingBilling.length} onClick={() => ctx.go('billing')} />
+                <Kpi label={t('dashboard.charts.invoicedMonth')} value={facturadoMes} dot={DOT.apro} />
+              </div>
+            </div>
+            <div className="col-8">
+              <ChartCard title={t('dashboard.charts.billing')} sub={chBilling.useAmount ? t('dashboard.charts.amount') : t('dashboard.charts.count')} height={220}>
+                {(pendingBilling.length || invoicedBilling.length) ? <StackedBars data={chBilling.data} series={[{ key: 'facturado', label: t('billing.facturado'), color: SERIES_COLORS.facturado }, { key: 'pendiente', label: t('billing.pendiente'), color: SERIES_COLORS.pendiente }]} /> : <ChartEmpty label={t('dashboard.charts.empty')} />}
+              </ChartCard>
+            </div>
           </div>
-          {upcoming.length === 0 ? (
-            <div style={{ padding: '22px 20px', fontSize: 13.5, color: 'var(--text-3)' }}>{t('dashboard.noUpcoming')}</div>
-          ) : (
+        </section>
+      )}
+
+      {/* ---------- tickets ---------- */}
+      {showTickets && (
+        <section className="dash-section">
+          <SecHead title={t('dashboard.summaryByStatus')} meta={t('dashboard.charts.avgResolution') + ': ' + (kAvgRes === null ? '—' : kAvgRes + ' d')} />
+          <div className="kpi-row">
+            <Kpi accent label={t('dashboard.charts.openTickets')} value={A.ticketsOpenCount(tickets)} />
+            <Kpi label={t('dashboard.totalTickets')} value={c.total} dot={DOT.cerr} />
+            <Kpi label={t('dashboard.charts.avgResolution')} value={kAvgRes === null ? '—' : kAvgRes} suffix={kAvgRes === null ? '' : ' d'} dot={DOT.asig} />
+            <Kpi label={t('dashboard.charts.firstPass')} value={kFirstPass === null ? '—' : kFirstPass} suffix={kFirstPass === null ? '' : '%'} dot={DOT.apro} />
+          </div>
+
+          <div className="bento">
+            <div className="col-4">
+              <ChartCard title={t('dashboard.charts.ticketStatus')} height={210}>
+                {chTicketStatus.length ? <DonutChart data={chTicketStatus.map((x) => ({ ...x, label: t('status.' + x.key) }))} totalLabel={t('nav.tickets')} /> : <ChartEmpty label={t('dashboard.charts.empty')} />}
+              </ChartCard>
+            </div>
+            <div className="col-8">
+              <ChartCard title={t('dashboard.charts.createdVsResolved')} sub={t('dashboard.charts.byWeek')} height={210}>
+                {periodTickets.length ? <TrendChart data={chTicketTrend} series={[{ key: 'creados', label: t('dashboard.charts.created'), color: SERIES_COLORS.creados }, { key: 'resueltos', label: t('dashboard.charts.resolved'), color: SERIES_COLORS.resueltos }]} /> : <ChartEmpty label={t('dashboard.charts.empty')} />}
+              </ChartCard>
+            </div>
+            <div className="col-5">
+              <ChartCard title={t('dashboard.charts.ticketPriority')} height={200}>
+                {tickets.length ? <CategoryBars data={chTicketPriority.map((x) => ({ ...x, label: t('priority.' + x.key), color: PRIORITY_COLOR[x.key as keyof typeof PRIORITY_COLOR] }))} /> : <ChartEmpty label={t('dashboard.charts.empty')} />}
+              </ChartCard>
+            </div>
+            <div className="col-7">
+              <ChartCard title={t('dashboard.charts.ticketByTech')} height={200}>
+                {chTicketTech.length ? <CategoryBars data={chTicketTech} horizontal color="#002A42" /> : <ChartEmpty label={t('dashboard.charts.empty')} />}
+              </ChartCard>
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-head">
+              <h3>{t('dashboard.recentTickets')}</h3>
+              <button className="link-more" onClick={() => ctx.go('tickets')}>{t('dashboard.viewAll')} <Icon name="chevronRight" size={15} /></button>
+            </div>
             <div style={{ overflowX: 'auto' }}>
               <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>{t('tickets.colNum')}</th>
+                    <th>{t('tickets.colTitle')}</th>
+                    <th>{t('tickets.colClient')}</th>
+                    <th>{t('tickets.colTech')}</th>
+                    <th>{t('tickets.colPriority')}</th>
+                    <th>{t('tickets.colStatus')}</th>
+                    <th>{t('tickets.colScheduled')}</th>
+                    <th></th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {upcoming.map((o) => (
-                    <tr key={o.id} onClick={() => ctx.go('soDetail', { id: o.id })} style={{ cursor: 'pointer' }}>
-                      <td className="mono" style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>
-                        <b>{o.scheduledDate === d ? t('dashboard.todayShort') : o.scheduledDate.slice(5)}</b> {o.scheduledTime}
-                      </td>
-                      <td style={{ fontWeight: 600 }}>{o.equipmentSnapshot?.typeName || o.num}</td>
-                      <td style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{o.client?.name}</td>
-                      <td style={{ fontSize: 12.5 }}>{techName(o.techId)}</td>
-                      <td><SOStatusBadge status={o.status} size="sm" /></td>
-                      <td><Icon name="chevronRight" size={15} style={{ color: 'var(--text-3)' }} /></td>
-                    </tr>
-                  ))}
+                  {recent.map((tk) => {
+                    const tech = ctx.db.technicians.find((x) => x.id === tk.techId);
+                    return (
+                      <tr key={tk.id} onClick={() => ctx.go('ticketDetail', { id: tk.id })} style={{ cursor: 'pointer' }}>
+                        <td className="mono" style={{ color: 'var(--text-2)', fontWeight: 500 }}>{tk.num}</td>
+                        <td style={{ fontWeight: 600, maxWidth: 230 }}>
+                          <div className="truncate">{tk.title}</div>
+                        </td>
+                        <td style={{ color: 'var(--text-2)' }}>{tk.client}</td>
+                        <td>
+                          {tech ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                              <Avatar initials={tech.initials} size={24} />
+                              {tech.name.split(' ')[0]}
+                            </span>
+                          ) : (
+                            <span style={{ color: 'var(--text-3)' }}>{t('common.unassigned')}</span>
+                          )}
+                        </td>
+                        <td><PriorityChip priority={tk.priority} /></td>
+                        <td><StatusBadge status={tk.status} size="sm" /></td>
+                        <td className="mono" style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{tk.scheduled}</td>
+                        <td><Icon name="chevronRight" size={16} style={{ color: 'var(--text-3)' }} /></td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
-
-        {alerts.length > 0 && (
-          <div className="card" style={{ overflow: 'hidden' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Icon name="alert" size={16} style={{ color: 'var(--st-rech-fg)' }} />
-              <span style={{ fontWeight: 700, fontSize: 15 }}>{t('dashboard.alerts')}</span>
-              <span className="badge" style={{ marginLeft: 'auto', background: 'var(--st-rech-bg)', color: 'var(--st-rech-fg)' }}>{alerts.length}</span>
-            </div>
-            {alerts.map((a, i) => (
-              <button key={i} onClick={a.go} style={{ display: 'flex', gap: 11, alignItems: 'flex-start', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '11px 18px', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}>
-                <span style={{ width: 30, height: 30, borderRadius: 8, flex: 'none', background: `var(--st-${a.tone}-bg)`, color: `var(--st-${a.tone}-fg)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon name={a.icon} size={15} />
-                </span>
-                <span>
-                  <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600 }}>{a.text}</span>
-                  <span style={{ display: 'block', fontSize: 12, color: 'var(--text-3)' }}>{a.sub}</span>
-                </span>
-              </button>
-            ))}
           </div>
-        )}
-      </div>
-      )}
-
-      {showTickets && (
-      <div>
-        <div className="section-label">{t('dashboard.summaryByStatus')}</div>
-        {/* tickets ad-hoc */}
-        <div className="metric-grid">
-          <MetricCard big label={t('dashboard.totalTickets')} count={c.total} />
-          <MetricCard cls={STATUS.pendiente.cls} label={t('status.pendiente')} count={c.pendiente} />
-          <MetricCard cls={STATUS.asignado.cls} label={t('status.asignado')} count={c.asignado} />
-          <MetricCard cls={STATUS.en_proceso.cls} label={t('status.en_proceso')} count={c.en_proceso} />
-          <MetricCard cls={STATUS.listo_revision.cls} label={t('status.listo_revision')} count={c.listo_revision} />
-          <MetricCard cls={STATUS.aprobado.cls} label={t('status.aprobado')} count={c.aprobado} />
-          <MetricCard cls={STATUS.rechazado.cls} label={t('status.rechazado')} count={c.rechazado} />
-          <MetricCard cls={STATUS.cerrado.cls} label={t('status.cerrado')} count={c.cerrado} />
-        </div>
-      </div>
-      )}
-
-      {showTickets && (
-      <div className="card" style={{ overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)' }}>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>{t('dashboard.recentTickets')}</div>
-          <button onClick={() => ctx.go('tickets')} style={{ border: 'none', background: 'transparent', color: 'var(--navy-700)', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-            {t('dashboard.viewAll')} <Icon name="chevronRight" size={15} />
-          </button>
-        </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>{t('tickets.colNum')}</th>
-                <th>{t('tickets.colTitle')}</th>
-                <th>{t('tickets.colClient')}</th>
-                <th>{t('tickets.colTech')}</th>
-                <th>{t('tickets.colPriority')}</th>
-                <th>{t('tickets.colStatus')}</th>
-                <th>{t('tickets.colScheduled')}</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {recent.map((tk) => {
-                const tech = ctx.db.technicians.find((x) => x.id === tk.techId);
-                return (
-                  <tr key={tk.id} onClick={() => ctx.go('ticketDetail', { id: tk.id })} style={{ cursor: 'pointer' }}>
-                    <td className="mono" style={{ color: 'var(--text-2)', fontWeight: 500 }}>{tk.num}</td>
-                    <td style={{ fontWeight: 600, maxWidth: 230 }}>
-                      <div className="truncate">{tk.title}</div>
-                    </td>
-                    <td style={{ color: 'var(--text-2)' }}>{tk.client}</td>
-                    <td>
-                      {tech ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-                          <Avatar initials={tech.initials} size={24} />
-                          {tech.name.split(' ')[0]}
-                        </span>
-                      ) : (
-                        <span style={{ color: 'var(--text-3)' }}>{t('common.unassigned')}</span>
-                      )}
-                    </td>
-                    <td><PriorityChip priority={tk.priority} /></td>
-                    <td><StatusBadge status={tk.status} size="sm" /></td>
-                    <td className="mono" style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{tk.scheduled}</td>
-                    <td><Icon name="chevronRight" size={16} style={{ color: 'var(--text-3)' }} /></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        </section>
       )}
 
       <CorrectiveModal open={correctiveOpen} onClose={() => setCorrectiveOpen(false)} ctx={ctx} onCreated={(id) => ctx.go('soDetail', { id })} />

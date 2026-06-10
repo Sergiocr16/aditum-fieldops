@@ -31,6 +31,74 @@
 .metric{transition:transform .16s var(--ease),box-shadow .16s var(--ease);}
 .metric:hover{transform:translateY(-2px);box-shadow:var(--sh-md);}
 
+/* ============================================================
+   Dashboard — layout system (rhythm, KPIs, bento, panels)
+   ============================================================ */
+/* Generous separation between sections; tight inside each. */
+.dash{display:flex;flex-direction:column;gap:34px;}
+
+/* Page header band */
+.dash-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px 24px;flex-wrap:wrap;}
+.dash-eyebrow{font-size:11.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;}
+.dash-title{font-size:23px;font-weight:800;letter-spacing:-.02em;line-height:1.1;}
+.dash-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+
+/* Segmented control (period) */
+.seg{display:inline-flex;background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:3px;}
+.seg button{border:none;background:transparent;font-size:12.5px;font-weight:600;color:var(--text-2);padding:6px 13px;border-radius:999px;cursor:pointer;transition:color .14s,background .14s;}
+.seg button:hover{color:var(--text);}
+.seg button.on{background:var(--surface);color:var(--navy-800);box-shadow:var(--sh-sm);}
+
+/* Section: header + body */
+.dash-section{display:flex;flex-direction:column;gap:16px;}
+.sec-head{display:flex;align-items:center;gap:12px;}
+.sec-head .bar{width:4px;height:17px;border-radius:2px;background:var(--gold);flex:none;}
+.sec-head h2{margin:0;font-size:15px;font-weight:700;letter-spacing:-.01em;}
+.sec-head .rule{flex:1;height:1px;background:var(--border);}
+.sec-head .meta{font-size:12.5px;color:var(--text-3);}
+
+/* KPI tiles — one vocabulary, compact, tinted-neutral */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px;}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--sh-sm);padding:15px 16px;display:flex;flex-direction:column;gap:11px;min-height:96px;}
+.kpi-top{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.kpi-label{font-size:11.5px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.04em;}
+.kpi-dot{width:9px;height:9px;border-radius:50%;flex:none;}
+.kpi-val{font-size:28px;font-weight:800;letter-spacing:-.025em;line-height:1;color:var(--text);display:flex;align-items:baseline;gap:3px;}
+.kpi-val .u{font-size:15px;font-weight:700;color:var(--text-3);}
+.kpi-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;}
+.kpi--link{cursor:pointer;transition:transform .16s var(--ease),box-shadow .16s var(--ease),border-color .16s;}
+.kpi--link:hover{transform:translateY(-2px);box-shadow:var(--sh-md);border-color:var(--border-strong);}
+.kpi--accent{background:var(--navy-800);border:none;color:#fff;}
+.kpi--accent .kpi-label{color:rgba(255,255,255,.62);}
+.kpi--accent .kpi-val{color:#fff;}
+
+/* Bento — deliberate 12-col spans (matches chart shape to footprint) */
+.bento{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;}
+.bento>.col-4{grid-column:span 4;}
+.bento>.col-5{grid-column:span 5;}
+.bento>.col-6{grid-column:span 6;}
+.bento>.col-7{grid-column:span 7;}
+.bento>.col-8{grid-column:span 8;}
+.bento>.col-12{grid-column:span 12;}
+@media (max-width:1080px){
+  .bento{grid-template-columns:repeat(6,1fr);}
+  .bento>.col-8,.bento>.col-7,.bento>.col-12{grid-column:span 6;}
+  .bento>.col-4,.bento>.col-5,.bento>.col-6{grid-column:span 3;}
+}
+@media (max-width:680px){
+  .bento{grid-template-columns:1fr;}
+  .bento>*{grid-column:span 1!important;}
+}
+
+/* Panels (lists/tables) — one header vocabulary */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--sh-sm);overflow:hidden;display:flex;flex-direction:column;}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);}
+.panel-head h3{margin:0;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;}
+.link-more{border:none;background:transparent;color:var(--navy-700);font-weight:600;font-size:13px;display:inline-flex;align-items:center;gap:4px;cursor:pointer;}
+.link-more:hover{color:var(--navy-900);}
+.alert-row{display:flex;gap:11px;align-items:flex-start;width:100%;text-align:left;border:none;background:transparent;padding:11px 18px;border-top:1px solid var(--border);cursor:pointer;transition:background .14s;}
+.alert-row:hover{background:var(--bg);}
+
 /* ---------- Quick actions ---------- */
 .quick-action{flex:1;min-width:240px;display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:14px;border:1px solid var(--border);background:var(--surface);cursor:pointer;transition:all .16s var(--ease);box-shadow:var(--sh-sm);text-align:left;}
 .quick-action:hover{box-shadow:var(--sh-md);transform:translateY(-2px);border-color:var(--border-strong);}
