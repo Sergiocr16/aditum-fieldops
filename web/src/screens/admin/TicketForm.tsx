@@ -128,7 +128,7 @@ export default function TicketForm({ ctx, mode, id }: { ctx: AppCtx; mode: strin
   };
 
   return (
-    <div className="fade-in" style={{ maxWidth: 860, margin: '0 auto' }}>
+    <div className="fade-in" >
       <PageHeader title={editing ? t('ticketForm.editTitle') : t('ticketForm.createTitle')} sub={editing ? existing?.num : t('ticketForm.newSub')} back={() => ctx.back()} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <FormSection letter="A" title={t('ticketForm.secA')}>

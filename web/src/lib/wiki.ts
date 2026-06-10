@@ -1,28 +1,29 @@
 /* © 2026 Aditum — Aditum FieldOps — Wiki data hook (Firestore) */
 import { useEffect, useState } from 'react';
-import { collection, doc, onSnapshot, query, where, addDoc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
-import { db } from './firebase';
+import { doc, onSnapshot, query, where, addDoc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from './auth';
+import { useTenant } from './tenant';
 import { now } from './time';
 import type { WikiCategory, WikiPage, WikiStatus } from './types';
 
 export function useWiki() {
   const { user } = useAuth();
+  const { tid, tcol, tdoc } = useTenant();
   const [pages, setPages] = useState<WikiPage[]>([]);
   const [categories, setCategories] = useState<WikiCategory[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !tid) return;
     const isAdmin = user.role === 'admin';
-    const pagesQ = isAdmin ? query(collection(db, 'wikiPages')) : query(collection(db, 'wikiPages'), where('status', '==', 'PUBLISHED'));
+    const pagesQ = isAdmin ? query(tcol('wikiPages')) : query(tcol('wikiPages'), where('status', '==', 'PUBLISHED'));
     const unsubP = onSnapshot(pagesQ, (snap) => {
       const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as WikiPage[];
       list.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
       setPages(list);
       setLoading(false);
     });
-    const unsubC = onSnapshot(collection(db, 'wikiCategories'), (snap) => {
+    const unsubC = onSnapshot(tcol('wikiCategories'), (snap) => {
       const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as WikiCategory[];
       list.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0) || a.name.localeCompare(b.name));
       setCategories(list);
@@ -31,7 +32,7 @@ export function useWiki() {
       unsubP();
       unsubC();
     };
-  }, [user?.uid, user?.role]);
+  }, [user?.uid, user?.role, tid]);
 
   const by = user?.name || '';
 
@@ -41,7 +42,7 @@ export function useWiki() {
     loading,
     createPage: async (data: Partial<WikiPage>) => {
       const ts = now();
-      const ref = await addDoc(collection(db, 'wikiPages'), {
+      const ref = await addDoc(tcol('wikiPages'), {
         title: data.title || '',
         categoryId: data.categoryId || null,
         contentMarkdown: data.contentMarkdown || '',
@@ -56,10 +57,10 @@ export function useWiki() {
       return ref.id;
     },
     updatePage: async (id: string, patch: Partial<WikiPage>) => {
-      await updateDoc(doc(db, 'wikiPages', id), { ...patch, updatedBy: by, updatedAt: now() } as any);
+      await updateDoc(tdoc('wikiPages', id), { ...patch, updatedBy: by, updatedAt: now() } as any);
     },
     /** Upsert (create-or-update) a page by a known id — used by the editor. */
-    newPageId: () => doc(collection(db, 'wikiPages')).id,
+    newPageId: () => doc(tcol('wikiPages')).id,
     savePage: async (id: string, data: Partial<WikiPage>, isNew: boolean) => {
       const ts = now();
       const base: any = { ...data, updatedBy: by, updatedAt: ts };
@@ -69,21 +70,21 @@ export function useWiki() {
         base.createdAt = ts;
         if (!base.attachments) base.attachments = [];
       }
-      await setDoc(doc(db, 'wikiPages', id), base, { merge: true });
+      await setDoc(tdoc('wikiPages', id), base, { merge: true });
     },
     setPageStatus: async (id: string, status: WikiStatus) => {
       const patch: any = { status, updatedBy: by, updatedAt: now() };
       if (status === 'PUBLISHED') patch.publishedAt = now();
-      await updateDoc(doc(db, 'wikiPages', id), patch);
+      await updateDoc(tdoc('wikiPages', id), patch);
     },
     deletePage: async (id: string) => {
-      await deleteDoc(doc(db, 'wikiPages', id));
+      await deleteDoc(tdoc('wikiPages', id));
     },
     createCategory: async (name: string, description = '') => {
-      await addDoc(collection(db, 'wikiCategories'), { name, description, active: true, orderIndex: 0, createdAt: now(), updatedAt: now() });
+      await addDoc(tcol('wikiCategories'), { name, description, active: true, orderIndex: 0, createdAt: now(), updatedAt: now() });
     },
     updateCategory: async (id: string, patch: Partial<WikiCategory>) => {
-      await updateDoc(doc(db, 'wikiCategories', id), { ...patch, updatedAt: now() } as any);
+      await updateDoc(tdoc('wikiCategories', id), { ...patch, updatedAt: now() } as any);
     },
   };
 }

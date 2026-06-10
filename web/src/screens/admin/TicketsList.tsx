@@ -69,9 +69,13 @@ function TicketRowMenu({ ticket, ctx, onApprove, onReject, onReassign }: any) {
                     navigator.clipboard && navigator.clipboard.writeText(ticket.share.url);
                     toast(t('share.copied'), 'success');
                   })
-                : item('link', t('tickets.menuGenLink'), () => {
-                    generateLink(ctx, ticket);
-                    toast(t('share.generated'), 'success');
+                : item('link', t('tickets.menuGenLink'), async () => {
+                    try {
+                      await generateLink(ctx, ticket);
+                      toast(t('share.generated'), 'success');
+                    } catch (e: any) {
+                      toast(e?.message || 'Error', 'error');
+                    }
                   })}
             </>
           )}

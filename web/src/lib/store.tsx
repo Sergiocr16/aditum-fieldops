@@ -1,4 +1,4 @@
-/* © 2026 Aditum — Aditum FieldOps — Firestore-backed data store */
+/* © 2026 Aditum — Aditum FieldOps — Firestore-backed data store (tenant-scoped) */
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
   collection,
@@ -13,6 +13,7 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebase';
 import { useAuth } from './auth';
+import { useTenant, ticketPrefixOf } from './tenant';
 import { initialsOf } from './config';
 import { now, today } from './time';
 import type { AppUser, Ticket } from './types';
@@ -28,10 +29,13 @@ export interface DataState {
     email: string;
     phone?: string;
     password: string;
+    role?: string;
   }) => Promise<{ uid: string; password: string }>;
   updateTechnician: (id: string, patch: Partial<AppUser>) => Promise<void>;
   resetTechnicianPassword: (id: string) => Promise<{ password: string }>;
   sendPublicLink: (ticketId: string, to: string, cc?: string, message?: string) => Promise<{ url: string }>;
+  /** Generates / regenerates / toggles the public link (server-side token). */
+  ensurePublicLink: (ticketId: string, action?: 'generate' | 'regenerate' | 'toggle') => Promise<{ token: string; url: string; active: boolean }>;
 }
 
 const Ctx = createContext<DataState>(null as any);
@@ -39,22 +43,29 @@ export const useData = () => useContext(Ctx);
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const { tid, tenant, tcol, tdoc } = useTenant();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [technicians, setTechnicians] = useState<AppUser[]>([]);
   const [loadingT, setLoadingT] = useState(true);
   const [loadingU, setLoadingU] = useState(true);
 
-  // Tickets: admin sees all; technician sees only theirs.
+  const isMember = !!user && !!tid && (user.role === 'admin' || user.role === 'tech');
+  // Coordinador y admin necesitan la lista de técnicos (para asignar en contratos/OS).
+  const canListTechs = !!user && !!tid && (user.role === 'admin' || user.role === 'coordinador');
+
+  // Tickets: admin sees all (of their tenant); technician sees only theirs.
+  // (Coordinador/facturación no tienen acceso a tickets.)
   useEffect(() => {
-    if (!user) {
+    if (!isMember) {
       setTickets([]);
+      setLoadingT(false);
       return;
     }
-    const base = collection(db, 'tickets');
+    const base = tcol('tickets');
     const q =
-      user.role === 'admin'
+      user!.role === 'admin'
         ? query(base, orderBy('created', 'desc'))
-        : query(base, where('techId', '==', user.uid));
+        : query(base, where('techId', '==', user!.uid));
     return onSnapshot(
       q,
       (snap) => {
@@ -66,16 +77,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       },
       () => setLoadingT(false)
     );
-  }, [user?.uid, user?.role]);
+  }, [user?.uid, user?.role, tid]);
 
-  // Technicians (admin only needs the full list; technician doesn't list users).
+  // Technicians: global users collection filtered by tenant (admin + coordinador).
   useEffect(() => {
-    if (!user || user.role !== 'admin') {
+    if (!canListTechs) {
       setTechnicians([]);
       setLoadingU(false);
       return;
     }
-    const q = query(collection(db, 'users'), where('role', '==', 'tech'));
+    const q = query(collection(db, 'users'), where('tenantId', '==', tid), where('role', '==', 'tech'));
     return onSnapshot(
       q,
       (snap) => {
@@ -86,22 +97,24 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       },
       () => setLoadingU(false)
     );
-  }, [user?.uid, user?.role]);
+  }, [user?.uid, user?.role, tid]);
+
+  const ticketPrefix = ticketPrefixOf(tenant);
 
   const actions = useMemo<Omit<DataState, 'tickets' | 'technicians' | 'loading'>>(
     () => ({
       updateTicket: async (id, patch) => {
-        await updateDoc(doc(db, 'tickets', id), patch as any);
+        await updateDoc(tdoc('tickets', id), patch as any);
       },
       addTicket: async (data) => {
-        const ref = doc(collection(db, 'tickets'));
+        const ref = doc(tcol('tickets'));
         const num = await runTransaction(db, async (tx) => {
-          const counterRef = doc(db, 'counters', 'tickets');
+          const counterRef = tdoc('counters', 'tickets');
           const cs = await tx.get(counterRef);
           const next = (cs.exists() ? (cs.data() as any).value : 1040) + 1;
           tx.set(counterRef, { value: next }, { merge: true });
-          tx.set(ref, { ...data, num: 'AD-' + next, created: now() });
-          return 'AD-' + next;
+          tx.set(ref, { ...data, num: ticketPrefix + '-' + next, created: now() });
+          return ticketPrefix + '-' + next;
         });
         return num;
       },
@@ -124,14 +137,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         const res: any = await fn({ ticketId, to, cc, message });
         return res.data as { url: string };
       },
+      ensurePublicLink: async (ticketId, action = 'generate') => {
+        const fn = httpsCallable(functions, 'ensurePublicLink');
+        const res: any = await fn({ ticketId, action });
+        return res.data as { token: string; url: string; active: boolean };
+      },
     }),
-    []
+    [tid, ticketPrefix]
   );
 
   const value: DataState = {
     tickets,
     technicians,
-    loading: loadingT || loadingU,
+    loading: isMember ? loadingT || loadingU : false,
     ...actions,
   };
 

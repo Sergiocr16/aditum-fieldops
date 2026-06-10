@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../lib/firebase';
+import { useTenant } from '../lib/tenant';
 import { now } from '../lib/time';
 import { Icon, toast } from './ui';
 import type { AppCtx } from '../lib/ctx';
@@ -22,6 +23,7 @@ function typeOf(file: File): EvidenceType {
 
 export default function Uploader({ ticket, ctx, kind, by }: { ticket: Ticket; ctx: AppCtx; kind: 'photo' | 'video'; by: string }) {
   const { t } = useTranslation();
+  const { tid } = useTenant();
   const isVideo = kind === 'video';
   const inputRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState<number | null>(null);
@@ -38,7 +40,7 @@ export default function Uploader({ ticket, ctx, kind, by }: { ticket: Ticket; ct
       return;
     }
     const fileId = Math.random().toString(36).slice(2) + '-' + Date.now();
-    const path = `tickets/${ticket.id}/${fileId}-${file.name.replace(/[^\w.\-]/g, '_')}`;
+    const path = `tenants/${tid}/tickets/${ticket.id}/${fileId}-${file.name.replace(/[^\w.\-]/g, '_')}`;
     const task = uploadBytesResumable(storageRef(storage, path), file, {
       contentType: file.type,
       customMetadata: { ticketId: ticket.id, uploadedBy: by, evidenceId: fileId },

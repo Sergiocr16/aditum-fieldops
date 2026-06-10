@@ -8,6 +8,7 @@
 */
 import admin from 'firebase-admin';
 import { readFileSync } from 'fs';
+import { randomBytes } from 'crypto';
 
 const projectId = process.env.FIREBASE_PROJECT_ID || 'aditum-fieldops';
 const saPath = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.GOOGLE_APPLICATION_CREDENTIALS;
@@ -19,6 +20,21 @@ if (saPath && !process.env.FIRESTORE_EMULATOR_HOST) {
 }
 const db = admin.firestore();
 const auth = admin.auth();
+
+const TENANT_ID = process.env.TENANT_ID || 'aditum';
+const tcol = (name) => db.collection('tenants').doc(TENANT_ID).collection(name);
+
+// Seguridad: contra un proyecto que NO sea demo/emulador, exigir --force para
+// evitar correr el seed (con credenciales conocidas) contra producción por error.
+const IS_EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST;
+const IS_DEMO = projectId.startsWith('demo-');
+if (!IS_EMULATOR && !IS_DEMO && !process.argv.includes('--force')) {
+  console.error(`✗ Negado: '${projectId}' no es un proyecto demo/emulador. Usá --force si realmente querés sembrar aquí.`);
+  process.exit(1);
+}
+
+// Contraseñas: si no se pasan por env, se generan aleatorias (no defaults fijos).
+const genPass = () => 'Ad-' + randomBytes(9).toString('base64url') + '!';
 
 const initials = (n) => n.split(' ').map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
 const now = () => {
@@ -34,17 +50,40 @@ async function ensureUser(email, password, name, role) {
   } catch {
     user = await auth.createUser({ email, password, displayName: name });
   }
-  await auth.setCustomUserClaims(user.uid, { role });
+  const claims = role === 'superadmin' ? { role } : { role, tenantId: TENANT_ID };
+  await auth.setCustomUserClaims(user.uid, claims);
   await db.collection('users').doc(user.uid).set(
-    { name, email, role, active: true, initials: initials(name), ticketsCount: 0, phone: '', createdAt: now(), updatedAt: now() },
+    { name, email, role, tenantId: role === 'superadmin' ? null : TENANT_ID, active: true, initials: initials(name), ticketsCount: 0, phone: '', createdAt: now(), updatedAt: now() },
     { merge: true }
   );
   return user.uid;
 }
 
 async function main() {
+  // tenant raíz
+  await db.collection('tenants').doc(TENANT_ID).set({
+    name: 'Aditum',
+    active: true,
+    branding: { appName: 'Aditum Service', logoUrl: '', primaryColor: '#002A42', accentColor: '#DEB66E' },
+    numbering: { ticketPrefix: 'AD', contractPrefix: 'CT', osPrefix: 'OS' },
+    notifyEmail: process.env.ADMIN_NOTIFY_EMAIL || 'partners@aditumcr.com',
+    smtpStatus: 'unset',
+    createdAt: now(),
+    updatedAt: now(),
+  }, { merge: true });
+  console.log(`✓ Tenant: ${TENANT_ID}`);
+
+  // Para demo/emulador se usa una contraseña fija legible; contra cualquier otro
+  // proyecto se exige pasarla por env o se genera una aleatoria (nunca un default conocido).
+  const demoPass = (fixed) => (IS_EMULATOR || IS_DEMO ? fixed : genPass());
+
+  const superEmail = process.env.SUPERADMIN_EMAIL || 'super@aditumcr.com';
+  const superPass = process.env.SUPERADMIN_PASSWORD || demoPass('Super2026!');
+  await ensureUser(superEmail, superPass, 'Super Admin', 'superadmin');
+  console.log(`✓ Superadmin: ${superEmail} / ${superPass}`);
+
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@aditumcr.com';
-  const adminPass = process.env.ADMIN_PASSWORD || 'Aditum2026!';
+  const adminPass = process.env.ADMIN_PASSWORD || demoPass('Aditum2026!');
   const adminUid = await ensureUser(adminEmail, adminPass, 'Admin Aditum', 'admin');
   console.log(`✓ Admin: ${adminEmail} / ${adminPass}`);
 
@@ -55,13 +94,13 @@ async function main() {
   ];
   const techIds = {};
   for (const [email, name] of techs) {
-    const pass = 'Tecnico2026!';
+    const pass = process.env.TECH_PASSWORD || demoPass('Tecnico2026!');
     techIds[name] = await ensureUser(email, pass, name, 'tech');
     console.log(`✓ Técnico: ${email} / ${pass}`);
   }
 
   // counter
-  await db.collection('counters').doc('tickets').set({ value: 1041 }, { merge: true });
+  await tcol('counters').doc('tickets').set({ value: 1041 }, { merge: true });
 
   const baseChecklist = (done) =>
     [
@@ -93,7 +132,7 @@ async function main() {
 
   for (const t of tickets) {
     const id = t.num.toLowerCase();
-    await db.collection('tickets').doc(id).set({
+    await tcol('tickets').doc(id).set({
       ...t,
       created: now(),
       techNote: '', techObs: '', readyAt: null,
@@ -105,8 +144,8 @@ async function main() {
   console.log(`✓ ${tickets.length} tickets de demo`);
 
   // wiki
-  const catRef = await db.collection('wikiCategories').add({ name: 'Lectores QR', description: 'Instalación y pruebas', active: true, orderIndex: 1, createdAt: now(), updatedAt: now() });
-  await db.collection('wikiPages').add({
+  const catRef = await tcol('wikiCategories').add({ name: 'Lectores QR', description: 'Instalación y pruebas', active: true, orderIndex: 1, createdAt: now(), updatedAt: now() });
+  await tcol('wikiPages').add({
     title: 'Instalación de lector QR',
     categoryId: catRef.id,
     contentMarkdown: '# Instalación de lector QR\n\n## Objetivo\nEsta guía explica cómo instalar y probar un lector QR en un punto de acceso.\n\n## Pasos\n1. Verificar alimentación eléctrica.\n2. Conectar el lector al controlador.\n3. Validar conexión a internet.\n4. Realizar prueba con código QR.\n5. Confirmar apertura de puerta.\n\n## Evidencia requerida\nEl técnico debe grabar un video mostrando:\n- Lector encendido.\n- Lectura del QR.\n- Respuesta del sistema.\n- Apertura del acceso.',

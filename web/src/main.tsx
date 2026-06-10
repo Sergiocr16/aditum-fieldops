@@ -6,6 +6,7 @@ import './i18n';
 import './styles/tokens.css';
 import './styles/layout.css';
 import { AuthProvider } from './lib/auth';
+import { TenantProvider } from './lib/tenant';
 import { DataProvider } from './lib/store';
 import App from './App';
 
@@ -13,9 +14,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <DataProvider>
-          <App />
-        </DataProvider>
+        <TenantProvider>
+          <DataProvider>
+            <App />
+          </DataProvider>
+        </TenantProvider>
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>

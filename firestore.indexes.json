@@ -1,4 +1,78 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "serviceOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "notify.noticeDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "serviceOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "scheduledDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "serviceOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "techId", "order": "ASCENDING" },
+        { "fieldPath": "scheduledDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "serviceOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "equipmentId", "order": "ASCENDING" },
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "serviceOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contractId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "availabilityBlocks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "techId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "invoiceItems",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "contractId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "invoiceItems",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contractId", "order": "ASCENDING" },
+        { "fieldPath": "serviceDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tenantId", "order": "ASCENDING" },
+        { "fieldPath": "role", "order": "ASCENDING" }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }

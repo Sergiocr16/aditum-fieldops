@@ -1,8 +1,9 @@
 /* © 2026 Aditum — Aditum Service — Inventory data hook (Firestore) */
 import { useEffect, useState } from 'react';
-import { collection, doc, onSnapshot, query, where, orderBy, limit, addDoc, updateDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { doc, onSnapshot, query, orderBy, limit, addDoc, updateDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from './firebase';
 import { useAuth } from './auth';
+import { useTenant } from './tenant';
 import { now } from './time';
 import type { InventoryItem, InventoryMovement } from './types';
 
@@ -10,13 +11,14 @@ export const nameKeyOf = (name: string) => (name || '').trim().toLowerCase().rep
 
 export function useInventory() {
   const { user } = useAuth();
+  const { tid, tcol, tdoc } = useTenant();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
-    const unsubI = onSnapshot(collection(db, 'inventory'), (snap) => {
+    if (!user || !tid) return;
+    const unsubI = onSnapshot(tcol('inventory'), (snap) => {
       const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as InventoryItem[];
       list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       setItems(list);
@@ -25,14 +27,14 @@ export function useInventory() {
     // movimientos solo los lee el admin (reglas)
     let unsubM = () => {};
     if (user.role === 'admin') {
-      const qM = query(collection(db, 'inventoryMovements'), orderBy('at', 'desc'), limit(300));
+      const qM = query(tcol('inventoryMovements'), orderBy('at', 'desc'), limit(300));
       unsubM = onSnapshot(qM, (snap) => setMovements(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as InventoryMovement[]), () => {});
     }
     return () => {
       unsubI();
       unsubM();
     };
-  }, [user?.uid, user?.role]);
+  }, [user?.uid, user?.role, tid]);
 
   return {
     items,
@@ -51,25 +53,25 @@ export function useInventory() {
         updatedAt: now(),
       };
       if (existing) {
-        await updateDoc(doc(db, 'inventory', existing.id), payload);
+        await updateDoc(tdoc('inventory', existing.id), payload);
         return existing.id;
       }
       payload.createdAt = now();
-      const ref = await addDoc(collection(db, 'inventory'), payload);
+      const ref = await addDoc(tcol('inventory'), payload);
       return ref.id;
     },
     updateItem: async (id: string, patch: Partial<InventoryItem>) => {
       const p: any = { ...patch, updatedAt: now() };
       if (patch.name) p.nameKey = nameKeyOf(patch.name);
-      await updateDoc(doc(db, 'inventory', id), p);
+      await updateDoc(tdoc('inventory', id), p);
     },
     deleteItem: async (id: string) => {
-      await deleteDoc(doc(db, 'inventory', id));
+      await deleteDoc(tdoc('inventory', id));
     },
     /** Importación masiva: upsert por nameKey (actualiza existentes, crea nuevos). */
     bulkUpsert: async (rows: Partial<InventoryItem>[]) => {
       // mapa actual de la BD (no solo el estado local) para upsert confiable
-      const snap = await getDocs(collection(db, 'inventory'));
+      const snap = await getDocs(tcol('inventory'));
       const byKey = new Map<string, string>();
       snap.docs.forEach((d) => byKey.set((d.data() as any).nameKey || nameKeyOf((d.data() as any).name), d.id));
       let batch = writeBatch(db);
@@ -91,10 +93,10 @@ export function useInventory() {
         };
         const existingId = byKey.get(key);
         if (existingId) {
-          batch.update(doc(db, 'inventory', existingId), payload);
+          batch.update(tdoc('inventory', existingId), payload);
           updated++;
         } else {
-          const ref = doc(collection(db, 'inventory'));
+          const ref = doc(tcol('inventory'));
           payload.createdAt = now();
           batch.set(ref, payload);
           byKey.set(key, ref.id);

@@ -2,11 +2,14 @@
   "mcpServers": {
     "fieldops-aditum": {
       "command": "node",
-      "args": ["mcp/dist/index.js"],
+      "args": [
+        "mcp/dist/index.js"
+      ],
       "env": {
         "FIREBASE_PROJECT_ID": "fieldops-aditum",
         "FIREBASE_SERVICE_ACCOUNT": "./secrets/service-account.json",
-        "MCP_ACTOR": "Admin"
+        "MCP_ACTOR": "Admin",
+        "MCP_TENANT_ID": "aditum"
       }
     }
   }

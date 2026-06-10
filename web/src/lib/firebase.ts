@@ -24,8 +24,11 @@ export const storage = getStorage(app);
 export const functions = getFunctions(app, REGION);
 
 if (import.meta.env.VITE_USE_EMULATORS === 'true') {
-  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
-  connectFirestoreEmulator(db, '127.0.0.1', 8080);
-  connectStorageEmulator(storage, '127.0.0.1', 9199);
-  connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+  // usar el host desde el que se abre la app (localhost o IP LAN) para que
+  // otras máquinas de la red puedan conectarse a los emuladores
+  const EMU_HOST = window.location.hostname || '127.0.0.1';
+  connectAuthEmulator(auth, `http://${EMU_HOST}:9099`, { disableWarnings: true });
+  connectFirestoreEmulator(db, EMU_HOST, 8080);
+  connectStorageEmulator(storage, EMU_HOST, 9199);
+  connectFunctionsEmulator(functions, EMU_HOST, 5001);
 }

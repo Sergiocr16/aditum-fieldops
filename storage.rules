@@ -1,31 +1,48 @@
 rules_version = '2';
-// © 2026 Aditum — Aditum FieldOps — Storage security rules
+// © 2026 Aditum — Aditum FieldOps — Storage security rules (multi-tenant)
 service firebase.storage {
   match /b/{bucket}/o {
 
-    function signedIn() { return request.auth != null; }
-    function isAdmin()  { return signedIn() && request.auth.token.role == 'admin'; }
+    function signedIn()    { return request.auth != null; }
+    function inTenant(tid) { return signedIn() && request.auth.token.tenantId == tid; }
+    function isAdmin(tid)  { return inTenant(tid) && request.auth.token.role == 'admin'; }
     function okImage()  { return request.resource.contentType.matches('image/(jpeg|png|webp)'); }
     function okVideo()  { return request.resource.contentType.matches('video/(mp4|quicktime|webm)'); }
     function okPdf()    { return request.resource.contentType == 'application/pdf'; }
     function sizeOk()   { return request.resource.size < 200 * 1024 * 1024; } // 200MB hard cap
 
-    // Ticket evidence: any authenticated staff member can read; uploads must be valid media.
+    // Ticket evidence: tenant members read; uploads must be valid media.
     // (Per-ticket assignment is enforced by the app + Firestore rules; public access is via
-    //  signed/token URLs returned by the getPublicTicket function only.)
-    match /tickets/{ticketId}/{allPaths=**} {
-      allow read:           if signedIn();
-      allow create, update: if signedIn() && sizeOk() && (okImage() || okVideo() || okPdf());
-      allow delete:         if signedIn();
+    //  download-token URLs returned by getPublicTicket only.)
+    match /tenants/{tid}/tickets/{ticketId}/{allPaths=**} {
+      allow read:           if inTenant(tid);
+      allow create, update: if inTenant(tid) && sizeOk() && (okImage() || okVideo() || okPdf());
+      allow delete:         if inTenant(tid);
     }
 
-    // Wiki media: staff can read; only admins can upload/borrar.
-    match /wiki/{allPaths=**} {
-      allow read:           if signedIn();
-      allow create, update: if isAdmin() && sizeOk() && (okImage() || okVideo() || okPdf());
-      allow delete:         if isAdmin();
+    // Wiki media: tenant members read; only tenant admins upload/delete.
+    match /tenants/{tid}/wiki/{allPaths=**} {
+      allow read:           if inTenant(tid);
+      allow create, update: if isAdmin(tid) && sizeOk() && (okImage() || okVideo() || okPdf());
+      allow delete:         if isAdmin(tid);
     }
 
+    // Service orders: checklist photos + client signature PNG.
+    match /tenants/{tid}/serviceOrders/{soId}/{allPaths=**} {
+      allow read:           if inTenant(tid);
+      allow create, update: if inTenant(tid) && sizeOk() && okImage();
+      allow delete:         if inTenant(tid);
+    }
+
+    // Tenant branding assets (logo): members read, admin writes.
+    match /tenants/{tid}/branding/{allPaths=**} {
+      allow read:           if inTenant(tid);
+      allow create, update: if isAdmin(tid) && sizeOk() && okImage();
+      allow delete:         if isAdmin(tid);
+    }
+
+    // Legacy pre-tenant files keep serving through their download-token URLs
+    // (rules are bypassed by token URLs), so no legacy match is needed.
     match /{allPaths=**} {
       allow read, write: if false;
     }

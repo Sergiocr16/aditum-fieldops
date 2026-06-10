@@ -271,9 +271,9 @@ export default function TicketDetailAdmin({ ctx, id }: { ctx: AppCtx; id: string
 
           <SharePanel
             ticket={tk}
-            onGenerate={() => { generateLink(ctx, tk); toast(t('share.generated'), 'success'); }}
-            onRegenerate={() => { regenerateLink(ctx, tk); toast(t('share.regenerated'), 'success'); }}
-            onToggle={() => { toggleLink(ctx, tk); toast(tk.share.active ? t('share.disabled') : t('share.activated')); }}
+            onGenerate={async () => { try { await generateLink(ctx, tk); toast(t('share.generated'), 'success'); } catch (e: any) { toast(e?.message || 'Error', 'error'); } }}
+            onRegenerate={async () => { try { await regenerateLink(ctx, tk); toast(t('share.regenerated'), 'success'); } catch (e: any) { toast(e?.message || 'Error', 'error'); } }}
+            onToggle={async () => { try { await toggleLink(ctx, tk); toast(tk.share.active ? t('share.disabled') : t('share.activated')); } catch (e: any) { toast(e?.message || 'Error', 'error'); } }}
             onCopy={() => { navigator.clipboard && navigator.clipboard.writeText(tk.share.url || ''); toast(t('share.copied'), 'success'); }}
             onSendEmail={async ({ to, cc, message }: any) => {
               try {

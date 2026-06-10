@@ -13,7 +13,8 @@ documentación. Dos roles: **admin** (escritorio) y **técnico** (móvil). Idiom
 
 - Proyecto Firebase: **`fieldops-aditum`** · App: **https://fieldops-aditum.web.app**
   (dominio propio `https://service.aditumcr.com`, pendiente DNS en Cloudflare).
-- Admin: **admin@aditumcr.com / Aditum2026!** (nombre *Admin Aditum*).
+- Admin: **admin@aditumcr.com** (nombre *Admin Aditum*). La contraseña NO se documenta aquí;
+  está en el gestor de secretos del equipo. Rotala si alguna vez se sembró con el default viejo.
 - Regiones: Firestore **us-central1**, callables **us-central1**, bucket Storage **us-east1**
   (por eso `onEvidenceFinalized` corre en **us-east1**).
 - Las 5 Functions, reglas y hosting están desplegadas.

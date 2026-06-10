@@ -77,6 +77,24 @@ export function statusCounts(list: { status: TicketStatus }[]): StatusCounts {
   return c;
 }
 
+/* ---------------- service orders ---------------- */
+import type { ServiceOrderStatus } from './types';
+
+/** Reusa las clases de color de estados de tickets (--st-*) para los estados de OS. */
+export const SO_STATUS: Record<ServiceOrderStatus, { key: ServiceOrderStatus; cls: StatusCfg['cls']; order: number }> = {
+  PROGRAMADA: { key: 'PROGRAMADA', cls: 'pend', order: 0 },
+  NOTIFICADA: { key: 'NOTIFICADA', cls: 'asig', order: 1 },
+  CONFIRMADA: { key: 'CONFIRMADA', cls: 'apro', order: 2 },
+  REAGENDADA: { key: 'REAGENDADA', cls: 'revi', order: 3 },
+  EN_PROGRESO: { key: 'EN_PROGRESO', cls: 'proc', order: 4 },
+  SERVICIO_TERMINADO: { key: 'SERVICIO_TERMINADO', cls: 'apro', order: 5 },
+  PENDIENTE_FACTURAR: { key: 'PENDIENTE_FACTURAR', cls: 'revi', order: 6 },
+  FACTURADA: { key: 'FACTURADA', cls: 'cerr', order: 7 },
+  CANCELADA: { key: 'CANCELADA', cls: 'rech', order: 8 },
+};
+
+export const SO_ACTIVE_STATUSES: ServiceOrderStatus[] = ['PROGRAMADA', 'NOTIFICADA', 'CONFIRMADA', 'REAGENDADA', 'EN_PROGRESO'];
+
 export function initialsOf(name: string): string {
   return name
     .split(' ')

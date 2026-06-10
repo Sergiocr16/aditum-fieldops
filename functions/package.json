@@ -7,11 +7,13 @@
     "node": "20"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "npm run sync:shared && tsc",
     "serve": "npm run build && firebase emulators:start --only functions",
-    "deploy": "firebase deploy --only functions"
+    "deploy": "firebase deploy --only functions",
+    "sync:shared": "cp ../shared/src/index.ts src/shared.ts"
   },
   "dependencies": {
+    "@google-cloud/kms": "^5.5.1",
     "ffmpeg-static": "^5.2.0",
     "firebase-admin": "^12.6.0",
     "firebase-functions": "^6.1.0",

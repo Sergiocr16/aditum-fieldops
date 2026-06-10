@@ -1,7 +1,7 @@
 /* © 2026 Aditum — Aditum FieldOps — Shared UI components (ported from Claude Design) */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { STATUS, PRIORITY, PRIORITY_COLOR, TIMELINE_COLOR } from '../lib/config';
+import { STATUS, SO_STATUS, PRIORITY, PRIORITY_COLOR, TIMELINE_COLOR } from '../lib/config';
 import { setLang } from '../i18n';
 import type { Evidence, HistoryEntry, ShareLink } from '../lib/types';
 
@@ -58,6 +58,7 @@ export const ICONS: Record<string, string> = {
   bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0',
   zap: 'M13 2 3 14h9l-1 8 10-12h-9l1-8Z',
   globe: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20Z',
+  settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z',
 };
 
 export function Icon({ name, size = 18, stroke = 1.7, fill = 'none', className = '', style }: any) {
@@ -118,6 +119,17 @@ export function StatusBadge({ status, size }: any) {
     <span className={'badge ' + (size || '') + ' bg-' + s.cls}>
       <span className="dot" />
       {t('status.' + status)}
+    </span>
+  );
+}
+export function SOStatusBadge({ status, size }: any) {
+  const { t } = useTranslation();
+  const s = SO_STATUS[status as keyof typeof SO_STATUS];
+  if (!s) return null;
+  return (
+    <span className={'badge ' + (size || '') + ' bg-' + s.cls}>
+      <span className="dot" />
+      {t('soStatus.' + status)}
     </span>
   );
 }

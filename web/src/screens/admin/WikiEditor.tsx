@@ -7,6 +7,7 @@ import { Icon, Button, Field, Input, Select, Textarea, toast } from '../../compo
 import { PageHeader } from './AdminShell';
 import Markdown from '../../components/Markdown';
 import { useWiki } from '../../lib/wiki';
+import { useTenant } from '../../lib/tenant';
 import { now } from '../../lib/time';
 import type { AppCtx } from '../../lib/ctx';
 import type { WikiAttachment, EvidenceType } from '../../lib/types';
@@ -20,6 +21,7 @@ function refFor(att: WikiAttachment): string {
 export default function WikiEditor({ ctx, mode, id }: { ctx: AppCtx; mode: string; id?: string }) {
   const { t } = useTranslation();
   const wiki = useWiki();
+  const { tid } = useTenant();
   const editing = mode === 'edit';
   const existing = editing ? wiki.pages.find((p) => p.id === id) : null;
   const [pageId] = useState(() => id || wiki.newPageId());
@@ -37,7 +39,7 @@ export default function WikiEditor({ ctx, mode, id }: { ctx: AppCtx; mode: strin
     if (!file) return;
     const evType: EvidenceType = file.type.startsWith('video/') ? 'video' : file.type === 'application/pdf' ? 'pdf' : 'image';
     const fileId = Math.random().toString(36).slice(2);
-    const path = `wiki/${pageId}/${fileId}-${file.name.replace(/[^\w.\-]/g, '_')}`;
+    const path = `tenants/${tid}/wiki/${pageId}/${fileId}-${file.name.replace(/[^\w.\-]/g, '_')}`;
     setUploading(true);
     const task = uploadBytesResumable(storageRef(storage, path), file, { contentType: file.type });
     task.on(
@@ -65,7 +67,7 @@ export default function WikiEditor({ ctx, mode, id }: { ctx: AppCtx; mode: strin
   };
 
   return (
-    <div className="fade-in" style={{ maxWidth: 980, margin: '0 auto' }}>
+    <div className="fade-in" >
       <PageHeader title={editing ? t('wiki.edit') : t('wiki.create')} sub={t('wiki.newPage')} back={() => ctx.back()} />
 
       <div className="card card-pad" style={{ marginBottom: 16 }}>

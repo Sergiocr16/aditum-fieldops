@@ -1,9 +1,15 @@
 /* © 2026 Aditum — Aditum FieldOps — Technicians management */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Icon, Avatar, Button, Modal, Field, Input, Toggle, toast, CredentialsCard, confirmDialog } from '../../components/ui';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+import { Icon, Avatar, Button, Modal, Field, Input, Select, Toggle, toast, CredentialsCard, confirmDialog } from '../../components/ui';
 import { PageHeader } from './AdminShell';
+import { useTenant } from '../../lib/tenant';
 import type { AppCtx } from '../../lib/ctx';
+import type { AppUser } from '../../lib/types';
+
+const CREATABLE_ROLES = ['tech', 'coordinador', 'facturacion'] as const;
 
 export function genPassword() {
   const a = 'ABCDEFGHJKMNPQRSTUVWXYZ',
@@ -21,6 +27,7 @@ function TechFormModal({ open, tech, onClose, onSave }: any) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [role, setRole] = useState<string>('tech');
   const [pass, setPass] = useState('');
   const [err, setErr] = useState<any>({});
   const [saving, setSaving] = useState(false);
@@ -29,6 +36,7 @@ function TechFormModal({ open, tech, onClose, onSave }: any) {
       setName(tech?.name || '');
       setEmail(tech?.email || '');
       setPhone(tech?.phone || '');
+      setRole(tech?.role || 'tech');
       setPass(editing ? '' : genPassword());
       setErr({});
       setSaving(false);
@@ -45,7 +53,7 @@ function TechFormModal({ open, tech, onClose, onSave }: any) {
     if (Object.keys(e).length) return;
     setSaving(true);
     try {
-      await onSave({ id: tech?.id, name: name.trim(), email: email.trim(), phone: phone.trim(), password: pass });
+      await onSave({ id: tech?.id, name: name.trim(), email: email.trim(), phone: phone.trim(), password: pass, role });
     } finally {
       setSaving(false);
     }
@@ -77,6 +85,13 @@ function TechFormModal({ open, tech, onClose, onSave }: any) {
         <Field label={t('technicians.phone')} hint={t('common.optional')}>
           <Input icon="phone" placeholder="8888-8888" value={phone} onChange={(e: any) => setPhone(e.target.value)} />
         </Field>
+        {!editing && (
+          <Field label={t('technicians.fRole')} hint={t('technicians.fRoleHint')}>
+            <Select value={role} onChange={(e: any) => setRole(e.target.value)}>
+              {CREATABLE_ROLES.map((r) => <option key={r} value={r}>{t('roles.' + r)}</option>)}
+            </Select>
+          </Field>
+        )}
         {/* La contraseña se genera automáticamente y se muestra en la tarjeta de credenciales al crear. */}
       </div>
     </Modal>
@@ -91,7 +106,19 @@ export default function TechniciansScreen({ ctx, openCreate }: { ctx: AppCtx; op
     if (openCreate) setModal({ tech: null });
   }, [openCreate]);
 
+  const { tid } = useTenant();
   const techs = ctx.db.technicians;
+  // Personal de escritorio del tenant (coordinador/facturación) — query local.
+  const [staff, setStaff] = useState<AppUser[]>([]);
+  useEffect(() => {
+    if (!tid) return;
+    const q = query(collection(db, 'users'), where('tenantId', '==', tid), where('role', 'in', ['coordinador', 'facturacion']));
+    return onSnapshot(q, (snap) => {
+      const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as AppUser[];
+      list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      setStaff(list);
+    }, () => {});
+  }, [tid]);
 
   const onSave = async (data: any) => {
     if (data.id) {
@@ -104,7 +131,7 @@ export default function TechniciansScreen({ ctx, openCreate }: { ctx: AppCtx; op
       }
     } else {
       try {
-        await ctx.addTechnician({ name: data.name, email: data.email, phone: data.phone, password: data.password });
+        await ctx.addTechnician({ name: data.name, email: data.email, phone: data.phone, password: data.password, role: data.role });
         setModal(null);
         setCreds({ name: data.name, email: data.email, password: data.password, title: t('technicians.created'), sub: t('technicians.createdSub') });
       } catch (e: any) {
@@ -189,6 +216,55 @@ export default function TechniciansScreen({ ctx, openCreate }: { ctx: AppCtx; op
           </table>
         </div>
       </div>
+
+      {staff.length > 0 && (
+        <div style={{ marginTop: 22 }}>
+          <div className="section-label" style={{ marginBottom: 10 }}>{t('technicians.deskStaff')}</div>
+          <div className="card" style={{ overflow: 'hidden' }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>{t('technicians.colName')}</th>
+                  <th>{t('technicians.colRole')}</th>
+                  <th>{t('technicians.colEmail')}</th>
+                  <th>{t('technicians.colStatus')}</th>
+                  <th style={{ textAlign: 'right' }}>{t('technicians.colActions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {staff.map((u) => (
+                  <tr key={u.id}>
+                    <td>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                        <Avatar initials={u.initials} size={32} gold />
+                        <span style={{ fontWeight: 600 }}>{u.name}</span>
+                      </span>
+                    </td>
+                    <td><span className="badge sm">{t('roles.' + u.role)}</span></td>
+                    <td style={{ color: 'var(--text-2)' }} className="mono-sm">{u.email}</td>
+                    <td>
+                      <span className={'badge sm ' + (u.active ? 'bg-apro' : 'bg-cerr')}>
+                        <span className="dot" />
+                        {u.active ? t('technicians.active') : t('technicians.inactive')}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+                        <button className="icon-btn" title={t('technicians.resetPassword')} onClick={() => onResetPassword(u)}>
+                          <Icon name="lock" size={16} />
+                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, paddingLeft: 6, borderLeft: '1px solid var(--border)' }}>
+                          <Toggle on={u.active} onClick={async () => { await ctx.updateTechnician(u.id, { active: !u.active }); toast(u.active ? t('technicians.deactivated') : t('technicians.activated')); }} />
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <TechFormModal open={!!modal} tech={modal?.tech} onClose={() => setModal(null)} onSave={onSave} />
 

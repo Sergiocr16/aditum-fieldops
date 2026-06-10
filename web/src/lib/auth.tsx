@@ -15,8 +15,11 @@ export interface SessionUser {
   email: string;
   name: string;
   role: Role;
+  tenantId: string | null;
   initials: string;
   active: boolean;
+  /** Módulos visibles para este admin (vacío/ausente = todos). */
+  modules?: string[];
 }
 
 interface AuthState {
@@ -34,17 +37,25 @@ export class InactiveUserError extends Error {}
 async function resolveSession(fbUser: User): Promise<SessionUser> {
   const tokenResult = await fbUser.getIdTokenResult();
   let role = (tokenResult.claims.role as Role) || undefined;
-  const snap = await getDoc(doc(db, 'users', fbUser.uid));
-  const data = snap.exists() ? (snap.data() as any) : {};
+  const tenantId = (tokenResult.claims.tenantId as string) || null;
+  let data: any = {};
+  try {
+    const snap = await getDoc(doc(db, 'users', fbUser.uid));
+    data = snap.exists() ? (snap.data() as any) : {};
+  } catch {
+    // superadmin may operate without a users doc; claims are the source of truth
+  }
   if (!role) role = data.role || 'tech';
-  const active = data.active !== false;
+  const active = role === 'superadmin' ? true : data.active !== false;
   return {
     uid: fbUser.uid,
     email: fbUser.email || data.email || '',
     name: data.name || fbUser.displayName || fbUser.email || '',
     role: role as Role,
+    tenantId: role === 'superadmin' ? null : tenantId,
     initials: data.initials || (fbUser.email || '?').slice(0, 2).toUpperCase(),
     active,
+    modules: Array.isArray(data.modules) ? data.modules : undefined,
   };
 }
 

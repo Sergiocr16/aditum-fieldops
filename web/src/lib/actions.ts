@@ -1,6 +1,5 @@
 /* © 2026 Aditum — Aditum FieldOps — ticket transition helpers (write to Firestore via ctx) */
 import { now } from './time';
-import { makePublicToken, publicUrl } from './ctx';
 import type { AppCtx } from './ctx';
 import type { Ticket, TicketStatus } from './types';
 
@@ -55,21 +54,13 @@ export function addComment(ctx: AppCtx, t: Ticket, text: string, by: string, typ
   return ctx.updateTicket(t.id, { comments: [...t.comments, { type, by, at: now(), text }] });
 }
 
-/* ----- share link (admin) ----- */
+/* ----- share link (admin) — token minted server-side (ensurePublicLink callable) ----- */
 export function generateLink(ctx: AppCtx, t: Ticket) {
-  const token = makePublicToken();
-  ctx.updateTicket(t.id, {
-    share: { active: true, token, url: publicUrl(token), created: now(), lastVisit: null, createdBy: ctx.admin.uid },
-  });
-  return { token, url: publicUrl(token) };
+  return ctx.ensurePublicLink(t.id, 'generate');
 }
 export function regenerateLink(ctx: AppCtx, t: Ticket) {
-  const token = makePublicToken();
-  ctx.updateTicket(t.id, {
-    share: { active: true, token, url: publicUrl(token), created: now(), lastVisit: null, createdBy: ctx.admin.uid },
-  });
-  return { token, url: publicUrl(token) };
+  return ctx.ensurePublicLink(t.id, 'regenerate');
 }
 export function toggleLink(ctx: AppCtx, t: Ticket) {
-  return ctx.updateTicket(t.id, { share: { ...t.share, active: !t.share.active } });
+  return ctx.ensurePublicLink(t.id, 'toggle');
 }

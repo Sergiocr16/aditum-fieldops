@@ -8,24 +8,17 @@ export interface AppCtx {
   admin: { name: string; email: string; role: string; initials: string; uid: string };
   updateTicket: (id: string, patch: Partial<Ticket>) => void | Promise<void>;
   addTicket: (data: Partial<Ticket>) => Promise<string>;
-  addTechnician: (data: { name: string; email: string; phone?: string; password: string }) => Promise<{ uid: string; password: string }>;
+  addTechnician: (data: { name: string; email: string; phone?: string; password: string; role?: string }) => Promise<{ uid: string; password: string }>;
   updateTechnician: (id: string, patch: Partial<AppUser>) => void | Promise<void>;
   resetTechnicianPassword: (id: string) => Promise<{ password: string }>;
   sendPublicLink: (ticketId: string, to: string, cc?: string, message?: string) => Promise<{ url: string }>;
+  /** Server-side public-link management (tokens live in the global publicTokens collection). */
+  ensurePublicLink: (ticketId: string, action?: 'generate' | 'regenerate' | 'toggle') => Promise<{ token: string; url: string; active: boolean }>;
   go: (name: string, params?: any) => void;
   back: () => void;
   logout: () => void;
   openPublic: (ticket: Ticket) => void;
   loading: boolean;
-}
-
-/** Cryptographically strong, non-sequential, URL-safe public token (32 bytes). */
-export function makePublicToken(): string {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  let bin = '';
-  bytes.forEach((b) => (bin += String.fromCharCode(b)));
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 export function publicUrl(token: string): string {

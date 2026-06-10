@@ -3,11 +3,12 @@ import { useMemo, useState } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { useAuth } from './lib/auth';
 import { useData } from './lib/store';
-import { Icon, Toaster, ConfirmRoot } from './components/ui';
-import { publicUrl, makePublicToken } from './lib/ctx';
-import { now } from './lib/time';
+import { Icon, Toaster, ConfirmRoot, toast } from './components/ui';
+import { publicUrl } from './lib/ctx';
 import type { AppCtx } from './lib/ctx';
 import type { Ticket } from './lib/types';
+import SuperAdminApp from './screens/superadmin/SuperAdminApp';
+import { canAccessRoute } from './lib/modules';
 
 import Login from './screens/Login';
 import AdminShell from './screens/admin/AdminShell';
@@ -21,11 +22,28 @@ import { approveTicket, rejectTicket, reassignTicket, generateLink } from './lib
 import WikiListAdmin from './screens/admin/WikiList';
 import WikiEditor from './screens/admin/WikiEditor';
 import Inventory from './screens/admin/Inventory';
+import TenantSettings from './screens/admin/TenantSettings';
+import Contracts from './screens/admin/Contracts';
+import ContractForm from './screens/admin/ContractForm';
+import ContractDetail from './screens/admin/ContractDetail';
+import EquipmentScreen from './screens/admin/Equipment';
+import ServiceOrders from './screens/admin/ServiceOrders';
+import ServiceOrderDetail from './screens/admin/ServiceOrderDetail';
+import TemplateEditor from './screens/admin/TemplateEditor';
+import BillingInbox from './screens/admin/BillingInbox';
+import MobileServiceOrders from './screens/mobile/MobileServiceOrders';
+import MobileServiceOrder from './screens/mobile/MobileServiceOrder';
+import MobileSignature from './screens/mobile/MobileSignature';
+import PublicServiceReport from './screens/public/PublicServiceReport';
+import PublicConfirm from './screens/public/PublicConfirm';
+import PublicReschedule from './screens/public/PublicReschedule';
+import MobileAvailability from './screens/mobile/MobileAvailability';
+import NotifySettings from './screens/admin/NotifySettings';
+import ServiceCalendar from './screens/admin/ServiceCalendar';
 import TechDashboard from './screens/mobile/MobileDashboard';
 import TechTicketDetail from './screens/mobile/MobileTicket';
 import { TechWikiList, TechWikiPage } from './screens/mobile/MobileWiki';
 import PublicView from './screens/public/PublicView';
-import { toast } from './components/ui';
 
 function Spinner() {
   return (
@@ -40,7 +58,8 @@ function Spinner() {
 function AuthedApp() {
   const { user, logout } = useAuth();
   const data = useData();
-  const [route, setRoute] = useState(user!.role === 'admin' ? 'dashboard' : 'techDashboard');
+  const desktopRole = user!.role === 'admin' || user!.role === 'coordinador' || user!.role === 'facturacion';
+  const [route, setRoute] = useState(desktopRole ? 'dashboard' : 'techDashboard');
   const [params, setParams] = useState<any>({});
   const [hist, setHist] = useState<{ route: string; params: any }[]>([]);
   const [listModal, setListModal] = useState<any>(null);
@@ -62,6 +81,7 @@ function AuthedApp() {
       updateTechnician: data.updateTechnician,
       resetTechnicianPassword: data.resetTechnicianPassword,
       sendPublicLink: data.sendPublicLink,
+      ensurePublicLink: data.ensurePublicLink,
       go: (name, p = {}) => {
         setHist((h) => [...h, { route, params }]);
         setRoute(name);
@@ -79,21 +99,33 @@ function AuthedApp() {
         });
       },
       logout,
-      openPublic: (ticket: Ticket) => {
-        let token = ticket.share?.token;
-        if (!token) {
-          token = makePublicToken();
-          data.updateTicket(ticket.id, {
-            share: { active: true, token, url: publicUrl(token), created: now(), lastVisit: null, createdBy: user!.uid },
-          });
+      openPublic: async (ticket: Ticket) => {
+        const token = ticket.share?.active ? ticket.share?.token : null;
+        if (token) {
+          window.open(publicUrl(token), '_blank');
+          return;
         }
-        window.open(publicUrl(token), '_blank');
+        try {
+          const res = await data.ensurePublicLink(ticket.id, 'generate');
+          window.open(res.url, '_blank');
+        } catch (e: any) {
+          toast(e?.message || 'Error', 'error');
+        }
       },
     }),
     [data.tickets, data.technicians, data.loading, route, params, user]
   );
 
-  if (user!.role === 'admin') {
+  const isDesktop = user!.role === 'admin' || user!.role === 'coordinador' || user!.role === 'facturacion';
+  if (isDesktop) {
+    // Guard de módulos: si el rol no tiene acceso a la ruta, lo mandamos al dashboard.
+    if (!canAccessRoute(route, user!.role, user!.modules)) {
+      return (
+        <AdminShell ctx={ctx} route="dashboard">
+          <AdminDashboard ctx={ctx} />
+        </AdminShell>
+      );
+    }
     let inner: React.ReactNode = null;
     if (route === 'dashboard') inner = <AdminDashboard ctx={ctx} />;
     else if (route === 'tickets')
@@ -104,6 +136,17 @@ function AuthedApp() {
     else if (route === 'wiki') inner = <WikiListAdmin ctx={ctx} />;
     else if (route === 'wikiForm') inner = <WikiEditor ctx={ctx} mode={params.mode} id={params.id} />;
     else if (route === 'inventory') inner = <Inventory ctx={ctx} />;
+    else if (route === 'tenantSettings') inner = <TenantSettings ctx={ctx} />;
+    else if (route === 'contracts') inner = <Contracts ctx={ctx} />;
+    else if (route === 'contractForm') inner = <ContractForm ctx={ctx} mode={params.mode} id={params.id} />;
+    else if (route === 'contractDetail') inner = <ContractDetail ctx={ctx} id={params.id} />;
+    else if (route === 'equipment') inner = <EquipmentScreen ctx={ctx} />;
+    else if (route === 'serviceOrders') inner = <ServiceOrders ctx={ctx} />;
+    else if (route === 'soDetail') inner = <ServiceOrderDetail ctx={ctx} id={params.id} />;
+    else if (route === 'templateEditor') inner = <TemplateEditor ctx={ctx} typeId={params.typeId} />;
+    else if (route === 'billing') inner = <BillingInbox ctx={ctx} />;
+    else if (route === 'notifySettings') inner = <NotifySettings ctx={ctx} />;
+    else if (route === 'calendar') inner = <ServiceCalendar ctx={ctx} />;
     return (
       <>
         <AdminShell ctx={ctx} route={route}>
@@ -121,6 +164,10 @@ function AuthedApp() {
   if (route === 'techTicket') techScreen = <TechTicketDetail ctx={ctx} id={params.id} />;
   else if (route === 'techWiki') techScreen = <TechWikiList ctx={ctx} />;
   else if (route === 'techWikiPage') techScreen = <TechWikiPage ctx={ctx} id={params.id} />;
+  else if (route === 'techOrders') techScreen = <MobileServiceOrders ctx={ctx} />;
+  else if (route === 'techOrder') techScreen = <MobileServiceOrder ctx={ctx} id={params.id} />;
+  else if (route === 'techSignature') techScreen = <MobileSignature ctx={ctx} id={params.id} />;
+  else if (route === 'techAvailability') techScreen = <MobileAvailability ctx={ctx} />;
   else techScreen = <TechDashboard ctx={ctx} />;
   return (
     <div style={{ height: '100vh', maxWidth: 480, margin: '0 auto', boxShadow: '0 0 0 1px var(--border)' }}>
@@ -133,6 +180,7 @@ function Root() {
   const { user, loading } = useAuth();
   if (loading) return <Spinner />;
   if (!user) return <Login />;
+  if (user.role === 'superadmin') return <SuperAdminApp />;
   return <AuthedApp />;
 }
 
@@ -141,6 +189,9 @@ export default function App() {
     <>
       <Routes>
         <Route path="/p/:token" element={<PublicView />} />
+        <Route path="/r/:token" element={<PublicServiceReport />} />
+        <Route path="/confirm/:token" element={<PublicConfirm />} />
+        <Route path="/reschedule/:token" element={<PublicReschedule />} />
         <Route path="*" element={<Root />} />
       </Routes>
       <Toaster />

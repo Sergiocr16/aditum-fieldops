@@ -1,26 +1,31 @@
 /* © 2026 Aditum — Aditum FieldOps — Cloud Functions */
-/* deploy build: 1.0.1 */
+/* deploy build: 2.0.0 (multi-tenant) */
 import { setGlobalOptions } from 'firebase-functions/v2';
-import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onObjectFinalized } from 'firebase-functions/v2/storage';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import * as logger from 'firebase-functions/logger';
 import * as admin from 'firebase-admin';
 import { SMTP_USER, SMTP_PASS, ADMIN_EMAIL, sendMail, sendMailSafe, assignedTpl, readyTpl, rejectedTpl, approvedTpl, sharedReportTpl, lastRejectionComment } from './notifications';
 import { randomUUID } from 'crypto';
-import { initialsOf, nowCR, SHAREABLE_STATUSES } from './shared';
+import { initialsOf, nowCR } from './shared';
+import { tcol, tenantRef, assertAdmin, assertSameTenantUser, resolvePublicToken, createPublicToken, invalidatePublicToken } from './tenant';
 
 admin.initializeApp();
 const db = admin.firestore();
 
 setGlobalOptions({ region: process.env.FUNCTIONS_REGION || 'us-central1', maxInstances: 10 });
 
-/* ------------------------- helpers ------------------------- */
-function assertAdmin(req: CallableRequest) {
-  if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
-  if (req.auth.token.role !== 'admin') throw new HttpsError('permission-denied', 'Admin only.');
-}
+/* Tenant-management callables (superadmin) + per-tenant SMTP config + maintenance module. */
+export * from './tenants';
+export * from './smtp';
+export { importEquipment, setTechnicianAvailability } from './maintenance';
+export { dailyMaintenanceJob, runMaintenanceScheduler } from './scheduler';
+export { startServiceOrder, completeServiceOrder, onServiceOrderWritten } from './serviceOrders';
+export { getPublicServiceOrder, confirmServiceOrder, getTechnicianSlots, holdSlot, rescheduleServiceOrder, getPublicServiceReport } from './publicFlow';
+export { consolidateInvoiceItems, exportInvoiceCsv } from './billing';
 
+/* ------------------------- helpers ------------------------- */
 function genPassword() {
   const a = 'ABCDEFGHJKMNPQRSTUVWXYZ', b = 'abcdefghijkmnpqrstuvwxyz', n = '23456789', s = '@#$%';
   const buf = require('crypto').randomBytes(8);
@@ -29,10 +34,15 @@ function genPassword() {
 }
 
 /* ------------------------- technicians ------------------------- */
+// Un admin crea miembros de su tenant: técnico, coordinador o facturación.
+// (Crear otros admins es exclusivo del superadmin → createTenantAdmin.)
+const ADMIN_CREATABLE = ['tech', 'coordinador', 'facturacion'];
+
 export const createTechnician = onCall(async (req) => {
-  assertAdmin(req);
-  const { name, email, phone, password } = req.data || {};
+  const ctx = assertAdmin(req);
+  const { name, email, phone, password, role } = req.data || {};
   if (!name?.trim() || !email?.trim()) throw new HttpsError('invalid-argument', 'name and email are required.');
+  const memberRole = ADMIN_CREATABLE.includes(role) ? role : 'tech';
   const pass = (password && String(password)) || genPassword();
   let userRecord;
   try {
@@ -41,12 +51,13 @@ export const createTechnician = onCall(async (req) => {
     if (e.code === 'auth/email-already-exists') throw new HttpsError('already-exists', 'A user with that email already exists.');
     throw new HttpsError('internal', e.message || 'Could not create user.');
   }
-  await admin.auth().setCustomUserClaims(userRecord.uid, { role: 'tech' });
+  await admin.auth().setCustomUserClaims(userRecord.uid, { role: memberRole, tenantId: ctx.tenantId });
   const ts = nowCR();
   await db.collection('users').doc(userRecord.uid).set({
     name: name.trim(),
     email: email.trim(),
-    role: 'tech',
+    role: memberRole,
+    tenantId: ctx.tenantId,
     phone: phone || '',
     active: true,
     initials: initialsOf(name),
@@ -58,9 +69,10 @@ export const createTechnician = onCall(async (req) => {
 });
 
 export const updateTechnician = onCall(async (req) => {
-  assertAdmin(req);
+  const ctx = assertAdmin(req);
   const { id, name, phone, active, email } = req.data || {};
   if (!id) throw new HttpsError('invalid-argument', 'id is required.');
+  await assertSameTenantUser(ctx, id);
   const patch: any = { updatedAt: nowCR() };
   if (typeof name === 'string') {
     patch.name = name.trim();
@@ -87,33 +99,49 @@ export const updateTechnician = onCall(async (req) => {
 });
 
 export const resetTechnicianPassword = onCall(async (req) => {
-  assertAdmin(req);
+  const ctx = assertAdmin(req);
   const { id, password } = req.data || {};
   if (!id) throw new HttpsError('invalid-argument', 'id is required.');
+  await assertSameTenantUser(ctx, id);
   const pass = (password && String(password)) || genPassword();
   await admin.auth().updateUser(id, { password: pass });
   return { password: pass };
 });
 
+/* ------------------------- admin module permissions ------------------------- */
+const VALID_MODULES = ['tickets', 'technicians', 'contracts', 'equipment', 'serviceOrders', 'calendar', 'billing', 'inventory', 'wiki', 'notifySettings'];
+
+/** Define qué módulos ve un admin del mismo tenant. Lista vacía = ve todos.
+    Solo aplica a usuarios con rol 'admin'. */
+export const setAdminModules = onCall(async (req) => {
+  const ctx = assertAdmin(req);
+  const { adminId, modules } = req.data || {};
+  if (!adminId) throw new HttpsError('invalid-argument', 'adminId es requerido.');
+  const target = await assertSameTenantUser(ctx, adminId);
+  if (target.role !== 'admin') throw new HttpsError('failed-precondition', 'El usuario destino no es administrador.');
+  const clean = Array.isArray(modules) ? [...new Set(modules.filter((m: any) => VALID_MODULES.includes(m)))] : [];
+  await db.collection('users').doc(adminId).set({ modules: clean, updatedAt: nowCR() }, { merge: true });
+  return { ok: true, modules: clean };
+});
+
 /* ------------------------- public ticket (no auth) ------------------------- */
 export const getPublicTicket = onCall(async (req) => {
-  const token = req.data?.token;
-  if (!token) throw new HttpsError('not-found', 'Missing token', { reason: 'notfound' });
-  const snap = await db.collection('tickets').where('share.token', '==', token).limit(1).get();
-  if (snap.empty) throw new HttpsError('not-found', 'Not found', { reason: 'notfound' });
-  const doc = snap.docs[0];
-  const t = doc.data() as any;
+  const tk = await resolvePublicToken(req.data?.token, 'ticket_share');
+  const ref = tcol(tk.tenantId, 'tickets').doc(tk.targetId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Not found', { reason: 'notfound' });
+  const t = snap.data() as any;
   const sh = t.share || {};
   if (!sh.active) throw new HttpsError('permission-denied', 'Link disabled', { reason: 'disabled' });
-  if (sh.expiresAt && nowCR() > sh.expiresAt) throw new HttpsError('permission-denied', 'Link expired', { reason: 'expired' });
 
   // record visit (best-effort)
-  doc.ref.set({ share: { ...sh, lastVisit: nowCR() } }, { merge: true }).catch(() => {});
+  ref.set({ share: { ...sh, lastVisit: nowCR() } }, { merge: true }).catch(() => {});
 
   let techName = '';
   if (t.techId) {
     const u = await db.collection('users').doc(t.techId).get();
-    techName = u.exists ? (u.data() as any).name : '';
+    const ud = u.exists ? (u.data() as any) : null;
+    techName = ud && ud.tenantId === tk.tenantId ? ud.name : '';
   }
 
   // sanitized DTO — only what the public should see
@@ -140,29 +168,58 @@ export const getPublicTicket = onCall(async (req) => {
   return { ticket };
 });
 
-/* ------------------------- share public link by email (admin) ------------------------- */
+/* ------------------------- public link management (admin) ------------------------- */
 const PUBLIC_BASE = process.env.PUBLIC_BASE_URL || 'https://fieldops-aditum.web.app';
 
-export const sharePublicLink = onCall({ secrets: [SMTP_USER, SMTP_PASS] }, async (req) => {
-  assertAdmin(req);
-  const { ticketId, to, cc, message } = req.data || {};
-  if (!ticketId || !to || !String(to).trim()) {
-    throw new HttpsError('invalid-argument', 'ticketId y destinatarios son requeridos.');
-  }
-  const ref = db.collection('tickets').doc(ticketId);
+async function ensureLink(tenantId: string, ticketId: string, by: string, action: 'generate' | 'regenerate' | 'toggle') {
+  const ref = tcol(tenantId, 'tickets').doc(ticketId);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'Ticket no encontrado.');
   const t = snap.data() as any;
   let sh = t.share || {};
-  if (!sh.active || !sh.token) {
-    const token = require('crypto').randomBytes(32).toString('base64url');
-    sh = { active: true, token, url: `${PUBLIC_BASE}/p/${token}`, created: nowCR(), lastVisit: null, createdBy: req.auth!.uid };
+
+  if (action === 'toggle' && sh.token) {
+    const active = !sh.active;
+    sh = { ...sh, active };
+    await ref.set({ share: sh }, { merge: true });
+    await db.collection('publicTokens').doc(sh.token).set({ active, ...(active ? { invalidatedAt: null } : { invalidatedAt: nowCR() }) }, { merge: true });
+    return { token: sh.token as string, url: sh.url as string, active };
+  }
+
+  const mustCreate = action === 'regenerate' || !sh.token || !sh.active;
+  if (mustCreate) {
+    if (sh.token) await invalidatePublicToken(sh.token);
+    const token = await createPublicToken({ tenantId, purpose: 'ticket_share', targetId: ticketId, singleUse: false, createdBy: by });
+    sh = { active: true, token, url: `${PUBLIC_BASE}/p/${token}`, created: nowCR(), lastVisit: null, createdBy: by };
     await ref.set({ share: sh }, { merge: true });
   }
-  const url = `${PUBLIC_BASE}/p/${sh.token}`;
+  return { token: sh.token as string, url: sh.url as string, active: true };
+}
+
+/** Generates / regenerates / toggles the public link of a ticket.
+    Token resolution lives in the global `publicTokens` collection, so the
+    client can no longer mint tokens directly. */
+export const ensurePublicLink = onCall(async (req) => {
+  const ctx = assertAdmin(req);
+  const { ticketId, action } = req.data || {};
+  if (!ticketId) throw new HttpsError('invalid-argument', 'ticketId es requerido.');
+  const act = action === 'regenerate' || action === 'toggle' ? action : 'generate';
+  return await ensureLink(ctx.tenantId, ticketId, ctx.uid, act);
+});
+
+/* ------------------------- share public link by email (admin) ------------------------- */
+export const sharePublicLink = onCall({ secrets: [SMTP_USER, SMTP_PASS] }, async (req) => {
+  const ctx = assertAdmin(req);
+  const { ticketId, to, cc, message } = req.data || {};
+  if (!ticketId || !to || !String(to).trim()) {
+    throw new HttpsError('invalid-argument', 'ticketId y destinatarios son requeridos.');
+  }
+  const { url } = await ensureLink(ctx.tenantId, ticketId, ctx.uid, 'generate');
+  const snap = await tcol(ctx.tenantId, 'tickets').doc(ticketId).get();
+  const t = snap.data() as any;
   const m = sharedReportTpl({ num: t.num, title: t.title, client: t.client, site: t.site, priority: t.priority, scheduled: t.scheduled }, url, message);
   try {
-    await sendMail(String(to).trim(), m.subject, m.html, cc ? String(cc).trim() : undefined);
+    await sendMail(ctx.tenantId, String(to).trim(), m.subject, m.html, cc ? String(cc).trim() : undefined);
   } catch (e: any) {
     throw new HttpsError('internal', 'No se pudo enviar el correo: ' + (e?.message || 'error'));
   }
@@ -170,10 +227,18 @@ export const sharePublicLink = onCall({ secrets: [SMTP_USER, SMTP_PASS] }, async
 });
 
 /* ------------------------- evidence finalize (compress video) ------------------------- */
+const LEGACY_TENANT = process.env.LEGACY_TENANT_ID || 'aditum';
+
 export const onEvidenceFinalized = onObjectFinalized({ memory: '1GiB', timeoutSeconds: 300, region: process.env.STORAGE_REGION || 'us-east1' }, async (event) => {
   const object = event.data;
   const filePath = object.name || '';
-  if (!filePath.startsWith('tickets/')) return;
+  // tenants/{tid}/tickets/{ticketId}/... — with a legacy fallback for in-flight
+  // uploads under the pre-tenant `tickets/` prefix during the migration window.
+  const parts = filePath.split('/');
+  let tid: string;
+  if (parts[0] === 'tenants' && parts[2] === 'tickets') tid = parts[1];
+  else if (parts[0] === 'tickets') tid = LEGACY_TENANT;
+  else return;
   if (filePath.includes('/compressed/')) return; // already processed
   const meta = object.metadata || {};
   const ticketId = meta.ticketId;
@@ -181,7 +246,7 @@ export const onEvidenceFinalized = onObjectFinalized({ memory: '1GiB', timeoutSe
   if (!ticketId || !evidenceId) return;
   const isVideo = (object.contentType || '').startsWith('video/');
 
-  const ticketRef = db.collection('tickets').doc(ticketId);
+  const ticketRef = tcol(tid, 'tickets').doc(ticketId);
 
   if (!isVideo) {
     // images/pdf are ready as-is; ensure status flag is set
@@ -210,7 +275,7 @@ export const onEvidenceFinalized = onObjectFinalized({ memory: '1GiB', timeoutSe
         .save(tmpOut);
     });
 
-    const compressedPath = `tickets/${ticketId}/compressed/${evidenceId}.mp4`;
+    const compressedPath = `tenants/${tid}/tickets/${ticketId}/compressed/${evidenceId}.mp4`;
     const downloadToken = randomUUID();
     await bucket.upload(tmpOut, {
       destination: compressedPath,
@@ -222,7 +287,7 @@ export const onEvidenceFinalized = onObjectFinalized({ memory: '1GiB', timeoutSe
     // remove the original to save space (best-effort)
     bucket.file(filePath).delete().catch(() => {});
     try { fs.unlinkSync(tmpIn); fs.unlinkSync(tmpOut); } catch {}
-    logger.info(`Compressed video for ticket ${ticketId} / evidence ${evidenceId}`);
+    logger.info(`Compressed video for tenant ${tid} ticket ${ticketId} / evidence ${evidenceId}`);
   } catch (e: any) {
     logger.error('Video compression failed; leaving original.', e);
     await markEvidenceReady(ticketRef, evidenceId);
@@ -230,40 +295,49 @@ export const onEvidenceFinalized = onObjectFinalized({ memory: '1GiB', timeoutSe
 });
 
 /* ------------------------- email notifications (assignment + status) ------------------------- */
-async function techEmail(techId?: string | null): Promise<string | null> {
+async function techEmail(tenantId: string, techId?: string | null): Promise<string | null> {
   if (!techId) return null;
   const u = await db.collection('users').doc(techId).get();
-  return u.exists ? (u.data() as any).email || null : null;
+  if (!u.exists) return null;
+  const ud = u.data() as any;
+  if (ud.tenantId !== tenantId) return null;
+  return ud.email || null;
+}
+
+async function tenantNotifyEmail(tenantId: string): Promise<string> {
+  const t = await tenantRef(tenantId).get();
+  return (t.exists && (t.data() as any).notifyEmail) || ADMIN_EMAIL;
 }
 
 export const onTicketWritten = onDocumentWritten(
-  { document: 'tickets/{id}', region: 'us-central1', secrets: [SMTP_USER, SMTP_PASS] },
+  { document: 'tenants/{tid}/tickets/{id}', region: 'us-central1', secrets: [SMTP_USER, SMTP_PASS] },
   async (event) => {
     const after = event.data?.after?.data() as any;
     if (!after) return; // borrado
     const before = event.data?.before?.data() as any;
+    const tid = event.params.tid;
     const ticket = { id: event.params.id, ...after };
 
     // Asignación / reasignación
     if (after.techId && after.techId !== before?.techId) {
-      const email = await techEmail(after.techId);
+      const email = await techEmail(tid, after.techId);
       const m = assignedTpl(ticket);
-      if (email) await sendMailSafe(email, m.subject, m.html);
+      if (email) await sendMailSafe(tid, email, m.subject, m.html);
     }
 
     // Cambio de estado
     if (after.status !== before?.status) {
       if (after.status === 'listo_revision') {
         const m = readyTpl(ticket);
-        await sendMailSafe(ADMIN_EMAIL, m.subject, m.html);
+        await sendMailSafe(tid, await tenantNotifyEmail(tid), m.subject, m.html);
       } else if (after.status === 'rechazado') {
-        const email = await techEmail(after.techId);
+        const email = await techEmail(tid, after.techId);
         const m = rejectedTpl(ticket, lastRejectionComment(after));
-        if (email) await sendMailSafe(email, m.subject, m.html);
+        if (email) await sendMailSafe(tid, email, m.subject, m.html);
       } else if (after.status === 'aprobado') {
-        const email = await techEmail(after.techId);
+        const email = await techEmail(tid, after.techId);
         const m = approvedTpl(ticket);
-        if (email) await sendMailSafe(email, m.subject, m.html);
+        if (email) await sendMailSafe(tid, email, m.subject, m.html);
       }
     }
 
@@ -281,7 +355,7 @@ export const onTicketWritten = onDocumentWritten(
           const td = tsnap.data() as any;
           if (!td || td.materialsApplied || td.status !== 'aprobado') return;
           const mats = (td.materials || []).filter((m: any) => m.productId && m.qty > 0);
-          const refs = mats.map((m: any) => db.collection('inventory').doc(m.productId));
+          const refs = mats.map((m: any) => tcol(tid, 'inventory').doc(m.productId));
           const snaps: any[] = [];
           for (const r of refs) snaps.push(await tx.get(r as FirebaseFirestore.DocumentReference)); // reads antes de writes
           mats.forEach((m: any, idx: number) => {
@@ -290,7 +364,7 @@ export const onTicketWritten = onDocumentWritten(
               const cur = Number((s.data() as any).quantity) || 0;
               tx.update(s.ref, { quantity: Math.max(0, cur - Number(m.qty)) });
             }
-            const mv = db.collection('inventoryMovements').doc();
+            const mv = tcol(tid, 'inventoryMovements').doc();
             tx.set(mv, {
               productId: m.productId,
               productName: m.name,

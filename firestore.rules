@@ -1,67 +1,176 @@
 rules_version = '2';
-// © 2026 Aditum — Aditum FieldOps — Firestore security rules
+// © 2026 Aditum — Aditum FieldOps — Firestore security rules (multi-tenant)
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn()  { return request.auth != null; }
-    function isAdmin()   { return signedIn() && request.auth.token.role == 'admin'; }
-    function isTech()    { return signedIn() && request.auth.token.role == 'tech'; }
-    function myUid()     { return request.auth.uid; }
+    function signedIn()    { return request.auth != null; }
+    function roleIs(r)     { return signedIn() && request.auth.token.role == r; }
+    function isSuper()     { return roleIs('superadmin'); }
+    function inTenant(tid) { return signedIn() && request.auth.token.tenantId == tid; }
+    function hasRole(tid, r) { return inTenant(tid) && request.auth.token.role == r; }
+    function isAdmin(tid)  { return isSuper() || hasRole(tid, 'admin'); }
+    function isCoord(tid)  { return hasRole(tid, 'coordinador'); }
+    function isFact(tid)   { return hasRole(tid, 'facturacion'); }
+    function isTech(tid)   { return hasRole(tid, 'tech'); }
+    // Operaciones = admin o coordinador (planificación); puede gestionar contratos/equipos/OS.
+    function isOps(tid)    { return isAdmin(tid) || isCoord(tid); }
+    function myUid()       { return request.auth.uid; }
 
-    // ---------- users ----------
-    // Reads: admin reads everyone; a user reads only their own profile.
-    // Writes: only via Cloud Functions (Admin SDK bypasses rules) — never from the client.
+    // ---------- users (global: Auth is project-wide; tenantId lives in the doc) ----------
+    // Reads: superadmin reads everyone; a user reads their own profile; admin y
+    // coordinador leen usuarios de su tenant (para asignar técnicos). Writes: solo Functions.
     match /users/{uid} {
-      allow read: if isAdmin() || (signedIn() && uid == myUid());
+      allow read: if isSuper()
+                  || (signedIn() && uid == myUid())
+                  || (signedIn()
+                      && (request.auth.token.role == 'admin' || request.auth.token.role == 'coordinador')
+                      && resource.data.tenantId == request.auth.token.tenantId);
       allow write: if false;
     }
 
-    // ---------- ticket counter ----------
-    match /counters/{doc} {
-      allow read, write: if isAdmin();
-    }
+    // ---------- public tokens / MCP keys (Functions only) ----------
+    match /publicTokens/{token} { allow read, write: if false; }
+    match /mcpApiKeys/{hash}    { allow read, write: if false; }
 
-    // ---------- tickets ----------
-    match /tickets/{id} {
-      allow read:   if isAdmin() || (isTech() && resource.data.techId == myUid());
-      allow create: if isAdmin();
-      allow delete: if isAdmin();
-      // Admin can update anything. Technician can update only their own ticket while it's
-      // in an editable state, and cannot reassign it or jump to admin-only statuses.
-      allow update: if isAdmin() || (
-        isTech()
-        && resource.data.techId == myUid()
-        && request.resource.data.techId == resource.data.techId
-        && resource.data.status in ['asignado','pendiente','en_proceso','rechazado']
-        && request.resource.data.status in ['asignado','pendiente','en_proceso','rechazado','listo_revision']
-      );
-    }
-
-    // ---------- wiki categories ----------
-    match /wikiCategories/{id} {
-      allow read:  if signedIn();
-      allow write: if isAdmin();
-    }
-
-    // ---------- wiki pages ----------
-    match /wikiPages/{id} {
-      // Admin sees all; technicians only published pages.
-      allow read:  if isAdmin() || (isTech() && resource.data.status == 'PUBLISHED');
-      allow write: if isAdmin();
-    }
-
-    // ---------- inventory ----------
-    // Técnicos pueden leerlo (para seleccionar materiales); solo admin escribe.
-    match /inventory/{id} {
-      allow read:  if signedIn();
-      allow write: if isAdmin();
-    }
-
-    // ---------- inventory movements (historial de consumo) ----------
-    // Solo admin lee; lo escribe únicamente la Cloud Function (Admin SDK).
-    match /inventoryMovements/{id} {
-      allow read:  if isAdmin();
+    // ---------- tenants ----------
+    match /tenants/{tid} {
+      // Branding/numbering are needed by every member; writes only via callables.
+      allow read: if isSuper() || inTenant(tid);
       allow write: if false;
+
+      // ---------- counters ----------
+      // Coordinador necesita el contador para numerar contratos/OS; facturación para FC.
+      match /counters/{doc} {
+        allow read, write: if isOps(tid) || isFact(tid);
+      }
+
+      // ---------- tickets ----------
+      match /tickets/{id} {
+        allow read:   if isAdmin(tid) || (isTech(tid) && resource.data.techId == myUid());
+        allow create: if isAdmin(tid);
+        allow delete: if isAdmin(tid);
+        // Admin can update anything. Technician can update only their own ticket while
+        // it's in an editable state, and cannot reassign it or jump to admin-only statuses.
+        allow update: if isAdmin(tid) || (
+          isTech(tid)
+          && resource.data.techId == myUid()
+          && request.resource.data.techId == resource.data.techId
+          && resource.data.status in ['asignado','pendiente','en_proceso','rechazado']
+          && request.resource.data.status in ['asignado','pendiente','en_proceso','rechazado','listo_revision']
+          // Lista blanca de campos que el técnico puede tocar; bloquea inyección
+          // de materialsApplied/approval/num u otros campos arbitrarios.
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status','checklist','evidence','history','materials','materialsNote','readyAt','techNote','techObs'])
+        );
+      }
+
+      // ---------- wiki ----------
+      match /wikiCategories/{id} {
+        allow read:  if isSuper() || inTenant(tid);
+        allow write: if isAdmin(tid);
+      }
+      match /wikiPages/{id} {
+        allow read:  if isAdmin(tid) || (isTech(tid) && resource.data.status == 'PUBLISHED');
+        allow write: if isAdmin(tid);
+      }
+
+      // ---------- inventory ----------
+      match /inventory/{id} {
+        allow read:  if isSuper() || inTenant(tid);
+        allow write: if isAdmin(tid);
+      }
+      match /inventoryMovements/{id} {
+        allow read:  if isAdmin(tid);
+        allow write: if false; // Cloud Functions only
+      }
+
+      // ---------- maintenance: contracts & equipment ----------
+      // Admin y coordinador gestionan; cualquier miembro del tenant lee (los datos
+      // de un equipo/contrato son de uso interno y no salen del tenant).
+      match /contracts/{id} {
+        allow read:  if inTenant(tid) || isSuper();
+        allow write: if isOps(tid);
+      }
+      match /equipment/{id} {
+        allow read:  if inTenant(tid) || isSuper();
+        allow write: if isOps(tid);
+      }
+      match /equipmentTypes/{id} {
+        allow read:  if isSuper() || inTenant(tid);
+        allow write: if isOps(tid);
+      }
+      // Published checklist template versions are immutable: only `status` may change.
+      match /checklistTemplates/{id} {
+        allow read:   if isSuper() || inTenant(tid);
+        allow create: if isOps(tid);
+        allow update: if isOps(tid) && (
+          resource.data.status == 'draft'
+          || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+        );
+        allow delete: if isOps(tid) && resource.data.status == 'draft';
+      }
+
+      // ---------- maintenance: service orders ----------
+      // Admin manages everything. The technician only edits execution fields of
+      // their own order while EN_PROGRESO (checklist answers, photos, notes);
+      // start/finish go through the startServiceOrder/completeServiceOrder callables.
+      // Admin/coordinador gestionan; facturación las lee (cola de facturación);
+      // el técnico solo edita ejecución de su propia orden EN_PROGRESO.
+      match /serviceOrders/{id} {
+        allow read: if isOps(tid) || isFact(tid) || (isTech(tid) && resource.data.techId == myUid());
+        allow create, delete: if isOps(tid);
+        allow update: if isOps(tid) || (
+          isTech(tid)
+          && resource.data.techId == myUid()
+          && request.resource.data.techId == resource.data.techId
+          && resource.data.status == 'EN_PROGRESO'
+          && request.resource.data.status == 'EN_PROGRESO'
+          && request.resource.data.num == resource.data.num
+          && request.resource.data.billingApplied == resource.data.billingApplied
+          && request.resource.data.scheduledDate == resource.data.scheduledDate
+          // El técnico solo llena ejecución; start/finish van por callable (Admin SDK).
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['checklist','photos','observations'])
+        );
+      }
+      match /availabilityBlocks/{id} {
+        allow read: if isOps(tid) || (isTech(tid) && resource.data.techId == myUid());
+        allow create, update: if isOps(tid) || (isTech(tid) && request.resource.data.techId == myUid());
+        allow delete: if isOps(tid) || (isTech(tid) && resource.data.techId == myUid());
+      }
+      match /notifications/{id} {
+        allow read: if isOps(tid);
+        allow write: if false; // solo Functions
+      }
+      // Cola de facturación: la leen admin/coordinador/facturación; la marca facturado
+      // admin o facturación (la creación es vía trigger; la consolidación vía callable).
+      match /invoiceItems/{id} {
+        allow read: if isOps(tid) || isFact(tid);
+        allow create, delete: if false; // solo Functions
+        allow update: if isAdmin(tid) || isFact(tid);
+      }
+      match /invoices/{id} {
+        allow read:  if isOps(tid) || isFact(tid);
+        allow write: if isAdmin(tid) || isFact(tid);
+      }
+
+      // ---------- settings ----------
+      // SMTP config is written only by the saveSmtpConfig callable (password ciphertext).
+      match /settings/smtp {
+        allow read:  if isAdmin(tid);
+        allow write: if false;
+      }
+      // settings de mantenimiento: las lee/edita operaciones (horizonte, anticipación…).
+      match /settings/{doc} {
+        allow read:  if isSuper() || inTenant(tid);
+        allow write: if isOps(tid);
+      }
+
+      // ---------- MCP key metadata (mirror for the UI; plaintext never stored) ----------
+      match /mcpKeys/{keyId} {
+        allow read:  if isAdmin(tid);
+        allow write: if false;
+      }
     }
 
     match /{document=**} {

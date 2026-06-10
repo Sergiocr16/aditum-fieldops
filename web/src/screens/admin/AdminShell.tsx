@@ -2,6 +2,8 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Logo, Icon, Avatar, Button, LangSwitcher } from '../../components/ui';
+import { MODULES, visibleModules } from '../../lib/modules';
+import { useAuth } from '../../lib/auth';
 import type { AppCtx } from '../../lib/ctx';
 
 export function PageHeader({ title, sub, action, back }: any) {
@@ -25,17 +27,13 @@ export function PageHeader({ title, sub, action, back }: any) {
 
 export default function AdminShell({ ctx, route, children }: { ctx: AppCtx; route: string; children: React.ReactNode }) {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [userMenu, setUserMenu] = useState(false);
-  const nav = [
-    { key: 'dashboard', label: t('nav.dashboard'), icon: 'dashboard', route: 'dashboard' },
-    { key: 'tickets', label: t('nav.tickets'), icon: 'ticket', route: 'tickets' },
-    { key: 'technicians', label: t('nav.technicians'), icon: 'users', route: 'technicians' },
-    { key: 'inventory', label: t('inventory.nav'), icon: 'building', route: 'inventory' },
-    { key: 'wiki', label: t('wiki.nav'), icon: 'file', route: 'wiki' },
-  ];
-  const activeKey = route === 'dashboard' ? 'dashboard' : ['tickets', 'ticketForm', 'ticketDetail'].includes(route) ? 'tickets' : route === 'technicians' ? 'technicians' : route === 'inventory' ? 'inventory' : ['wiki', 'wikiForm'].includes(route) ? 'wiki' : '';
-  const titles: any = { dashboard: t('nav.dashboard'), tickets: t('nav.tickets'), technicians: t('nav.technicians'), ticketForm: t('nav.ticket'), ticketDetail: t('nav.ticketDetail'), inventory: t('inventory.title'), wiki: t('wiki.title'), wikiForm: t('wiki.title') };
+  // Sidebar = módulos visibles para el rol (admin: su lista `modules`; coordinador/facturación: set fijo).
+  const nav = visibleModules(user?.role, user?.modules).map((m) => ({ key: m.key, label: t(m.labelKey), icon: m.icon, route: m.route }));
+  const activeKey = MODULES.find((m) => m.routes.includes(route))?.key || '';
+  const titles: any = { dashboard: t('nav.dashboard'), tickets: t('nav.tickets'), technicians: t('nav.technicians'), ticketForm: t('nav.ticket'), ticketDetail: t('nav.ticketDetail'), inventory: t('inventory.title'), wiki: t('wiki.title'), wikiForm: t('wiki.title'), tenantSettings: t('tenantSettings.title'), contracts: t('contracts.title'), contractForm: t('contracts.title'), contractDetail: t('contracts.title'), equipment: t('equipment.title'), serviceOrders: t('serviceOrders.title'), soDetail: t('serviceOrders.title'), templateEditor: t('templates.navTitle'), billing: t('billing.title'), notifySettings: t('notifySettings.title'), calendar: t('calendar.title') };
   const admin = ctx.admin;
 
   return (

@@ -20,7 +20,8 @@ i18n
     supportedLngs: SUPPORTED_LANGS as unknown as string[],
     interpolation: { escapeValue: false },
     detection: {
-      order: ['querystring', 'localStorage', 'navigator'],
+      // sin 'navigator': español por defecto salvo elección explícita (?lang= o switcher)
+      order: ['querystring', 'localStorage'],
       lookupQuerystring: 'lang',
       lookupLocalStorage: 'fo_lang',
       caches: ['localStorage'],

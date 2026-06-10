@@ -82,6 +82,9 @@ export default function TechDashboard({ ctx }: { ctx: AppCtx }) {
           <img src="/assets/aditum-horizontal.png" style={{ height: 24, filter: 'brightness(0) invert(1)' }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <LangSwitcher dark />
+            <button onClick={() => ctx.go('techOrders')} title={t('mobileOrders.title')} style={{ border: 'none', background: 'rgba(255,255,255,.12)', color: '#fff', width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="calendar" size={17} />
+            </button>
             <button onClick={() => ctx.go('techWiki')} title={t('wiki.title')} style={{ border: 'none', background: 'rgba(255,255,255,.12)', color: '#fff', width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Icon name="file" size={17} />
             </button>
