@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Icon, Avatar, Button, StatusBadge, PriorityChip, EmptyState, EvidenceThumb,
-  Lightbox, Timeline, SharePanel, toast,
+  Lightbox, Timeline, SharePanel, Toggle, toast,
 } from '../../components/ui';
 import { RejectModal, ApproveModal, ReassignModal } from './modals';
 import { approveTicket, rejectTicket, reassignTicket, closeTicket, addComment, generateLink, regenerateLink, toggleLink } from '../../lib/actions';
@@ -262,6 +262,39 @@ export default function TicketDetailAdmin({ ctx, id }: { ctx: AppCtx; id: string
               <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{t('ticketDetail.markedReadyShort')}</span>
               <span className="mono" style={{ fontSize: 13, fontWeight: 600 }}>{tk.readyAt || '—'}</span>
             </div>
+          </div>
+
+          <div className="card card-pad">
+            <div className="section-label" style={{ marginBottom: 12 }}>{t('ticketBilling.title')}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: tk.requiresInvoice ? 12 : 0, borderBottom: tk.requiresInvoice ? '1px solid var(--border)' : 'none' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600 }}>{t('ticketBilling.requires')}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{t('ticketBilling.requiresHint')}</div>
+              </div>
+              <Toggle on={!!tk.requiresInvoice} onClick={() => ctx.updateTicket(id, { requiresInvoice: !tk.requiresInvoice })} />
+            </div>
+            {tk.requiresInvoice && (
+              <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+                {tk.invoiced ? (
+                  <>
+                    <span style={{ width: 32, height: 32, borderRadius: 8, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--st-apro-bg)', color: 'var(--st-apro-fg)' }}>
+                      <Icon name="checkCircle" size={17} />
+                    </span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--st-apro-fg)' }}>{t('ticketBilling.invoiced')}{tk.invoiceNum ? ` · ${tk.invoiceNum}` : ''}</div>
+                      {tk.invoicedAt && <div className="mono" style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{tk.invoicedAt}</div>}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ width: 32, height: 32, borderRadius: 8, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--gold-50)', color: 'var(--gold-600)' }}>
+                      <Icon name="clock" size={17} />
+                    </span>
+                    <div style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: 'var(--gold-600)' }}>{t('ticketBilling.pending')}</div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="card card-pad">

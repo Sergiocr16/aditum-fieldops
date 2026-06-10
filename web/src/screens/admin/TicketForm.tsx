@@ -1,7 +1,7 @@
 /* © 2026 Aditum — Aditum FieldOps — Create / edit ticket */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Icon, Button, Field, Input, Textarea, Select, toast } from '../../components/ui';
+import { Icon, Button, Field, Input, Textarea, Select, Toggle, toast } from '../../components/ui';
 import { PageHeader } from './AdminShell';
 import { PRIORITY } from '../../lib/config';
 import { buildNewTicket } from '../../lib/store';
@@ -84,7 +84,7 @@ export default function TicketForm({ ctx, mode, id }: { ctx: AppCtx; mode: strin
   const [f, setF] = useState<any>(() =>
     existing
       ? { ...existing }
-      : { title: '', client: '', site: '', address: '', priority: 'media', techId: '', scheduled: '', deadline: '', description: '', instructions: '', expected: '', doneConditions: '', observations: '', evidenceReq: '', checklist: [{ id: 'a', text: '', done: false }] }
+      : { title: '', client: '', site: '', address: '', priority: 'media', techId: '', scheduled: '', deadline: '', description: '', instructions: '', expected: '', doneConditions: '', observations: '', evidenceReq: '', requiresInvoice: false, checklist: [{ id: 'a', text: '', done: false }] }
   );
   const [err, setErr] = useState<any>({});
   const set = (k: string, v: any) => setF((s: any) => ({ ...s, [k]: v }));
@@ -114,6 +114,7 @@ export default function TicketForm({ ctx, mode, id }: { ctx: AppCtx; mode: strin
         doneConditions: f.doneConditions,
         observations: f.observations,
         evidenceReq: f.evidenceReq,
+        requiresInvoice: !!f.requiresInvoice,
         checklist: f.checklist.filter((c: any) => c.text.trim()),
       });
       toast(t('ticketForm.updated'), 'success');
@@ -174,6 +175,16 @@ export default function TicketForm({ ctx, mode, id }: { ctx: AppCtx; mode: strin
             <Field label={t('ticketForm.fDeadline')}>
               <Input type="date" value={f.deadline} onChange={(e: any) => set('deadline', e.target.value)} />
             </Field>
+            <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--surface-2)' }}>
+              <span style={{ width: 36, height: 36, borderRadius: 10, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--gold-50)', color: 'var(--gold-600)' }}>
+                <Icon name="file" size={17} />
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{t('ticketBilling.requires')}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--text-3)' }}>{t('ticketBilling.requiresHint')}</div>
+              </div>
+              <Toggle on={!!f.requiresInvoice} onClick={() => set('requiresInvoice', !f.requiresInvoice)} />
+            </div>
           </div>
         </FormSection>
 

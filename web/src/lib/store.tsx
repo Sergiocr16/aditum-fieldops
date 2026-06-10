@@ -184,6 +184,7 @@ export function buildNewTicket(f: any, adminName: string, techName?: string): Pa
     doneConditions: f.doneConditions || '',
     observations: f.observations || '',
     evidenceReq: f.evidenceReq || '',
+    requiresInvoice: !!f.requiresInvoice,
     status,
     readyAt: null,
     checklist: (f.checklist || []).filter((c: any) => c.text.trim()),

@@ -152,6 +152,13 @@ input,textarea,select{font-family:inherit;}
 .input-ico .input{padding-left:38px;}
 .input-ico svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);}
 
+/* iOS Safari hace auto-zoom al enfocar un campo con font-size < 16px. En dispositivos
+   táctiles forzamos ≥16px en todos los controles (incluye overrides inline) para evitarlo,
+   sin tocar el diseño de escritorio ni deshabilitar el pinch-zoom de la página. */
+@media (pointer: coarse){
+  .input,.textarea,.select,input,textarea,select{font-size:16px !important;}
+}
+
 /* Toggle */
 .toggle{position:relative;width:42px;height:24px;border-radius:999px;background:#cfd5dd;border:none;transition:background .18s var(--ease);flex:none;padding:0;}
 .toggle::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .18s var(--ease);}

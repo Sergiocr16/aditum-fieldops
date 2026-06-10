@@ -6,6 +6,8 @@ import { db } from '../../lib/firebase';
 import { Icon, Avatar, Button, Modal, Field, Input, Select, Toggle, toast, CredentialsCard, confirmDialog } from '../../components/ui';
 import { PageHeader } from './AdminShell';
 import { useTenant } from '../../lib/tenant';
+import { tenantHasFeature } from '../../lib/modules';
+import AvailabilityEditor from '../../components/AvailabilityEditor';
 import type { AppCtx } from '../../lib/ctx';
 import type { AppUser } from '../../lib/types';
 
@@ -102,11 +104,13 @@ export default function TechniciansScreen({ ctx, openCreate }: { ctx: AppCtx; op
   const { t } = useTranslation();
   const [modal, setModal] = useState<any>(null);
   const [creds, setCreds] = useState<any>(null);
+  const [availTech, setAvailTech] = useState<any>(null);
   useEffect(() => {
     if (openCreate) setModal({ tech: null });
   }, [openCreate]);
 
-  const { tid } = useTenant();
+  const { tid, tenant } = useTenant();
+  const showAvail = tenantHasFeature('maintenance', tenant?.features);
   const techs = ctx.db.technicians;
   // Personal de escritorio del tenant (coordinador/facturación) — query local.
   const [staff, setStaff] = useState<AppUser[]>([]);
@@ -196,6 +200,11 @@ export default function TechniciansScreen({ ctx, openCreate }: { ctx: AppCtx; op
                       <button className="icon-btn" title={t('common.edit')} onClick={() => setModal({ tech })}>
                         <Icon name="edit" size={16} />
                       </button>
+                      {showAvail && (
+                        <button className="icon-btn" title={t('availability.manageTitle')} onClick={() => setAvailTech(tech)}>
+                          <Icon name="clock" size={16} />
+                        </button>
+                      )}
                       <button className="icon-btn" title={t('technicians.resetPassword')} onClick={() => onResetPassword(tech)}>
                         <Icon name="lock" size={16} />
                       </button>
@@ -270,6 +279,10 @@ export default function TechniciansScreen({ ctx, openCreate }: { ctx: AppCtx; op
 
       <Modal open={!!creds} onClose={() => setCreds(null)} width={420} title={t('technicians.created')} sub={t('technicians.createdSub')} tone="success" footer={<Button variant="primary" block onClick={() => setCreds(null)}>{t('common.understood')}</Button>}>
         {creds && <CredentialsCard name={creds.name} email={creds.email} password={creds.password} />}
+      </Modal>
+
+      <Modal open={!!availTech} onClose={() => setAvailTech(null)} width={520} title={t('availability.manageTitle')} sub={availTech ? t('availability.manageSub', { name: availTech.name }) : ''} footer={<Button variant="ghost" block onClick={() => setAvailTech(null)}>{t('common.close')}</Button>}>
+        {availTech && <AvailabilityEditor techId={availTech.id} canEdit={true} />}
       </Modal>
     </div>
   );

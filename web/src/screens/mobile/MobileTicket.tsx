@@ -7,6 +7,8 @@ import Uploader from '../../components/Uploader';
 import { ref as storageRef, deleteObject } from 'firebase/storage';
 import { storage } from '../../lib/firebase';
 import { useInventory } from '../../lib/inventory';
+import { useTenant } from '../../lib/tenant';
+import { tenantHasFeature } from '../../lib/modules';
 import { now } from '../../lib/time';
 import type { AppCtx } from '../../lib/ctx';
 import type { MaterialUse } from '../../lib/types';
@@ -38,6 +40,8 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
   const [lb, setLb] = useState<number | null>(null);
   const [warn, setWarn] = useState('');
   const inv = useInventory();
+  const { tenant } = useTenant();
+  const showMaterials = tenantHasFeature('inventory', tenant?.features);
   const [materials, setMaterials] = useState<MaterialUse[]>(tk?.materials || []);
   const [matNote, setMatNote] = useState(tk?.materialsNote || '');
   const [selProduct, setSelProduct] = useState('');
@@ -209,6 +213,7 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
           </Field>
         </MBlock>
 
+        {showMaterials && (
         <MBlock icon="ticket" q={t('materials.title')}>
           {materials.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
@@ -261,6 +266,7 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
           {!canEdit && materials.length === 0 && !matNote && <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{t('materials.none')}</div>}
           {!canEdit && matNote && <p style={{ margin: '6px 0 0', fontSize: 13.5, color: 'var(--text-2)' }}>{matNote}</p>}
         </MBlock>
+        )}
 
         <MBlock icon="upload" q={t('mobile.uploadEvidence')}>
           {tk.evidence.length > 0 && (

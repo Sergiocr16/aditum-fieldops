@@ -384,6 +384,41 @@ export const onTicketWritten = onDocumentWritten(
         logger.error('error rebajando inventario', e as Error);
       }
     }
+
+    // Facturación: si el ticket requiere factura y ya quedó aprobado/cerrado, se crea un
+    // invoiceItem que entra a la bandeja de Facturación (misma cola que las OS). Idempotente.
+    if (after.requiresInvoice === true && (after.status === 'aprobado' || after.status === 'cerrado') && !after.billingApplied) {
+      const ticketRef = event.data!.after!.ref;
+      try {
+        await db.runTransaction(async (tx) => {
+          const tsnap = await tx.get(ticketRef);
+          const td = tsnap.data() as any;
+          if (!td || td.billingApplied || td.requiresInvoice !== true) return;
+          if (td.status !== 'aprobado' && td.status !== 'cerrado') return;
+          const itemRef = tcol(tid, 'invoiceItems').doc();
+          const at = nowCR();
+          tx.set(itemRef, {
+            kind: 'ticket',
+            ticketId: ticketRef.id,
+            soNum: td.num, // display: número del ticket
+            type: 'ticket',
+            contractId: null,
+            licitacionNum: '',
+            clientName: td.client || '',
+            equipmentSummary: [td.title, td.site].filter(Boolean).join(' · '),
+            serviceDate: (td.readyAt || at).slice(0, 10),
+            status: 'pendiente',
+            invoiceId: null,
+            amount: null,
+            createdAt: at,
+          });
+          tx.set(ticketRef, { billingApplied: true, invoiceItemId: itemRef.id }, { merge: true });
+        });
+        logger.info('invoiceItem creado para ticket ' + after.num);
+      } catch (e) {
+        logger.error('facturación ticket: fallo creando invoiceItem', e as Error);
+      }
+    }
   }
 );
 

@@ -11,6 +11,7 @@ import { today } from '../../lib/time';
 import { CorrectiveModal } from './ServiceOrders';
 import { canSeeModule } from '../../lib/modules';
 import { useAuth } from '../../lib/auth';
+import { useTenant } from '../../lib/tenant';
 import { ChartCard, ChartEmpty, DonutChart, CategoryBars, StackedBars, TrendChart, Sparkline } from '../../components/charts';
 import * as A from '../../lib/analytics';
 import { PERIODS, type PeriodKey } from '../../lib/analytics';
@@ -56,8 +57,9 @@ function SecHead({ title, meta }: { title: string; meta?: React.ReactNode }) {
 export default function AdminDashboard({ ctx }: { ctx: AppCtx }) {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
-  // El dashboard refleja los módulos visibles del usuario.
-  const sees = (m: string) => canSeeModule(m, user?.role, user?.modules);
+  const { tenant } = useTenant();
+  // El dashboard refleja módulos de la empresa (features) + lo visible del usuario.
+  const sees = (m: string) => canSeeModule(m, user?.role, user?.modules, tenant?.features);
   const showTickets = sees('tickets');
   const showMaintenance = sees('serviceOrders') || sees('contracts') || sees('equipment') || sees('calendar');
   const showBilling = sees('billing');

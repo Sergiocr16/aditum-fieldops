@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Icon, Input, EmptyState } from '../../components/ui';
 import { MobileHeader } from './MobileDashboard';
+import { TechShell } from './MobileShell';
 import Markdown from '../../components/Markdown';
 import { useWiki } from '../../lib/wiki';
 import type { AppCtx } from '../../lib/ctx';
@@ -19,8 +20,7 @@ export function TechWikiList({ ctx }: { ctx: AppCtx }) {
     return true;
   });
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
-      <MobileHeader title={t('wiki.title')} onBack={() => ctx.go('techDashboard')} />
+    <TechShell ctx={ctx} active="wiki">
       <div style={{ padding: '12px 14px', background: '#fff', borderBottom: '1px solid var(--border)' }}>
         <Input icon="search" placeholder={t('wiki.search')} value={q} onChange={(e: any) => setQ(e.target.value)} />
       </div>
@@ -51,7 +51,7 @@ export function TechWikiList({ ctx }: { ctx: AppCtx }) {
           </div>
         )}
       </div>
-    </div>
+    </TechShell>
   );
 }
 

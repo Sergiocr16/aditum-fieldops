@@ -24,6 +24,12 @@ export interface Tenant {
   numbering: TenantNumbering;
   notifyEmail: string;
   smtpStatus: 'unset' | 'verified' | 'error';
+  /** Módulos que usa la empresa: tickets, maintenance, inventory, wiki. Ausente = todos. */
+  features?: string[];
+  /** Si el técnico puede editar su propia disponibilidad/bloqueos. Default false (lo gestiona admin/coordinador). */
+  techEditAvailability?: boolean;
+  /** Idioma de la empresa (lo fija el admin); aplica a todos los usuarios del tenant. Default 'es'. */
+  language?: 'es' | 'en';
   createdAt?: string;
   updatedAt?: string;
 }
@@ -416,4 +422,13 @@ export interface Ticket {
   materials?: MaterialUse[];
   materialsNote?: string;
   materialsApplied?: boolean;
+  // Facturación: el admin marca si requiere factura; el resto lo gestiona el backend
+  // (invoiceItem + bandeja de Facturación) y se refleja aquí al consolidar.
+  requiresInvoice?: boolean;
+  billingApplied?: boolean;
+  invoiceItemId?: string;
+  invoiced?: boolean;
+  invoicedAt?: string | null;
+  invoiceNum?: string;
+  invoiceNote?: string;
 }

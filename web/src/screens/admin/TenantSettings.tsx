@@ -8,6 +8,7 @@ import { useTenant } from '../../lib/tenant';
 import { Icon, Button, Field, Input, toast } from '../../components/ui';
 import { PageHeader } from './AdminShell';
 import AdminModules from './AdminModules';
+import TenantFeatures from './TenantFeatures';
 import type { AppCtx } from '../../lib/ctx';
 
 interface SmtpMeta {
@@ -21,8 +22,23 @@ interface SmtpMeta {
 
 export default function TenantSettings({ ctx }: { ctx: AppCtx }) {
   const { t } = useTranslation();
-  const { tenant, tdoc } = useTenant();
+  const { tenant, tid, tdoc } = useTenant();
   const [meta, setMeta] = useState<SmtpMeta | null>(null);
+  const [langBusy, setLangBusy] = useState(false);
+  const curLang = tenant?.language || 'es';
+
+  const setTenantLang = async (lang: 'es' | 'en') => {
+    if (!tid || lang === curLang) return;
+    setLangBusy(true);
+    try {
+      await httpsCallable(functions, 'updateTenant')({ tenantId: tid, language: lang });
+      toast(t('common.saved'), 'success');
+    } catch (e: any) {
+      toast(e?.message || 'Error', 'error');
+    } finally {
+      setLangBusy(false);
+    }
+  };
   const [user, setUser] = useState('');
   const [fromName, setFromName] = useState('');
   const [password, setPassword] = useState('');
@@ -82,6 +98,26 @@ export default function TenantSettings({ ctx }: { ctx: AppCtx }) {
   return (
     <div className="fade-in" >
       <PageHeader title={t('tenantSettings.title')} sub={t('tenantSettings.sub')} />
+
+      <div className="card card-pad" style={{ marginBottom: 16 }}>
+        <div className="section-label" style={{ marginBottom: 6 }}>{t('tenantSettings.langSection')}</div>
+        <p style={{ fontSize: 13, color: 'var(--text-2)', margin: '0 0 14px', lineHeight: 1.5 }}>{t('tenantSettings.langIntro')}</p>
+        <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+          {(['es', 'en'] as const).map((l) => (
+            <button
+              key={l}
+              onClick={() => langBusy ? null : setTenantLang(l)}
+              style={{ border: 'none', padding: '9px 22px', fontSize: 14, fontWeight: 600, cursor: 'pointer', background: curLang === l ? 'var(--navy-800)' : '#fff', color: curLang === l ? '#fff' : 'var(--text-2)' }}
+            >
+              {l === 'es' ? 'Español' : 'English'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <TenantFeatures />
+      </div>
 
       <div className="card card-pad" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>

@@ -15,6 +15,10 @@ service cloud.firestore {
     // Operaciones = admin o coordinador (planificación); puede gestionar contratos/equipos/OS.
     function isOps(tid)    { return isAdmin(tid) || isCoord(tid); }
     function myUid()       { return request.auth.uid; }
+    // ¿La empresa permite que el técnico edite su propia disponibilidad? (flag del tenant)
+    function techMayEditAvail(tid) {
+      return get(/databases/$(database)/documents/tenants/$(tid)).data.techEditAvailability == true;
+    }
 
     // ---------- users (global: Auth is project-wide; tenantId lives in the doc) ----------
     // Reads: superadmin reads everyone; a user reads their own profile; admin y
@@ -133,10 +137,12 @@ service cloud.firestore {
                .hasOnly(['checklist','photos','observations'])
         );
       }
+      // Disponibilidad/bloqueos: los gestiona admin/coordinador. El técnico solo
+      // puede editar los suyos si la empresa lo habilita (tenant.techEditAvailability).
       match /availabilityBlocks/{id} {
         allow read: if isOps(tid) || (isTech(tid) && resource.data.techId == myUid());
-        allow create, update: if isOps(tid) || (isTech(tid) && request.resource.data.techId == myUid());
-        allow delete: if isOps(tid) || (isTech(tid) && resource.data.techId == myUid());
+        allow create, update: if isOps(tid) || (isTech(tid) && request.resource.data.techId == myUid() && techMayEditAvail(tid));
+        allow delete: if isOps(tid) || (isTech(tid) && resource.data.techId == myUid() && techMayEditAvail(tid));
       }
       match /notifications/{id} {
         allow read: if isOps(tid);

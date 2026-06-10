@@ -30,6 +30,9 @@ export const consolidateInvoiceItems = onCall(async (req) => {
     const soSnaps = await Promise.all(
       items.map((it) => (it.data.serviceOrderId ? tx.get(tcol(ctx.tenantId, 'serviceOrders').doc(it.data.serviceOrderId)) : Promise.resolve(null)))
     );
+    const ticketSnaps = await Promise.all(
+      items.map((it) => (it.data.ticketId ? tx.get(tcol(ctx.tenantId, 'tickets').doc(it.data.ticketId)) : Promise.resolve(null)))
+    );
     const cs = await tx.get(counterRef);
     const next = (cs.exists ? (cs.data() as any).value : 1000) + 1;
     const invoiceNum = 'FC-' + next;
@@ -56,6 +59,11 @@ export const consolidateInvoiceItems = onCall(async (req) => {
           status: 'FACTURADA',
           history: [...(so.history || []), { status: 'FACTURADA', at, by: 'Admin', note: invoiceNum + (note ? ' · ' + note : '') }],
         });
+      }
+      const tkSnap = ticketSnaps[i];
+      if (tkSnap && tkSnap.exists) {
+        // El ticket conserva su estado (aprobado/cerrado); solo marcamos la facturación.
+        tx.update(tkSnap.ref, { invoiced: true, invoicedAt: at, invoiceNum, invoiceNote: String(note || '') });
       }
     });
     return invoiceNum;

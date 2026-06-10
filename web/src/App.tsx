@@ -8,7 +8,8 @@ import { publicUrl } from './lib/ctx';
 import type { AppCtx } from './lib/ctx';
 import type { Ticket } from './lib/types';
 import SuperAdminApp from './screens/superadmin/SuperAdminApp';
-import { canAccessRoute } from './lib/modules';
+import { canAccessRoute, tenantHasFeature } from './lib/modules';
+import { useTenant } from './lib/tenant';
 
 import Login from './screens/Login';
 import AdminShell from './screens/admin/AdminShell';
@@ -33,6 +34,7 @@ import TemplateEditor from './screens/admin/TemplateEditor';
 import BillingInbox from './screens/admin/BillingInbox';
 import MobileServiceOrders from './screens/mobile/MobileServiceOrders';
 import MobileServiceOrder from './screens/mobile/MobileServiceOrder';
+import MobileCalendar from './screens/mobile/MobileCalendar';
 import MobileSignature from './screens/mobile/MobileSignature';
 import PublicServiceReport from './screens/public/PublicServiceReport';
 import PublicConfirm from './screens/public/PublicConfirm';
@@ -57,9 +59,12 @@ function Spinner() {
 
 function AuthedApp() {
   const { user, logout } = useAuth();
+  const { tenant } = useTenant();
   const data = useData();
   const desktopRole = user!.role === 'admin' || user!.role === 'coordinador' || user!.role === 'facturacion';
-  const [route, setRoute] = useState(desktopRole ? 'dashboard' : 'techDashboard');
+  // Técnico: si la empresa no usa tickets, su home es órdenes de servicio.
+  const techHome = tenantHasFeature('tickets', tenant?.features) ? 'techDashboard' : (tenantHasFeature('maintenance', tenant?.features) ? 'techOrders' : 'techDashboard');
+  const [route, setRoute] = useState(desktopRole ? 'dashboard' : techHome);
   const [params, setParams] = useState<any>({});
   const [hist, setHist] = useState<{ route: string; params: any }[]>([]);
   const [listModal, setListModal] = useState<any>(null);
@@ -118,8 +123,8 @@ function AuthedApp() {
 
   const isDesktop = user!.role === 'admin' || user!.role === 'coordinador' || user!.role === 'facturacion';
   if (isDesktop) {
-    // Guard de módulos: si el rol no tiene acceso a la ruta, lo mandamos al dashboard.
-    if (!canAccessRoute(route, user!.role, user!.modules)) {
+    // Guard de módulos: si el rol/empresa no tiene acceso a la ruta, lo mandamos al dashboard.
+    if (!canAccessRoute(route, user!.role, user!.modules, tenant?.features)) {
       return (
         <AdminShell ctx={ctx} route="dashboard">
           <AdminDashboard ctx={ctx} />
@@ -165,12 +170,13 @@ function AuthedApp() {
   else if (route === 'techWiki') techScreen = <TechWikiList ctx={ctx} />;
   else if (route === 'techWikiPage') techScreen = <TechWikiPage ctx={ctx} id={params.id} />;
   else if (route === 'techOrders') techScreen = <MobileServiceOrders ctx={ctx} />;
+  else if (route === 'techCalendar') techScreen = <MobileCalendar ctx={ctx} />;
   else if (route === 'techOrder') techScreen = <MobileServiceOrder ctx={ctx} id={params.id} />;
   else if (route === 'techSignature') techScreen = <MobileSignature ctx={ctx} id={params.id} />;
   else if (route === 'techAvailability') techScreen = <MobileAvailability ctx={ctx} />;
   else techScreen = <TechDashboard ctx={ctx} />;
   return (
-    <div style={{ height: '100vh', maxWidth: 480, margin: '0 auto', boxShadow: '0 0 0 1px var(--border)' }}>
+    <div style={{ height: '100dvh', maxWidth: 480, margin: '0 auto', boxShadow: '0 0 0 1px var(--border)' }}>
       {techScreen}
     </div>
   );

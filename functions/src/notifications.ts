@@ -125,15 +125,15 @@ export function layout(opts: { heading: string; intro: string; ticket: any; extr
 
 export function assignedTpl(ticket: any) {
   return {
-    subject: `Nuevo ticket asignado: ${ticket.num} — ${ticket.title}`,
-    html: layout({ heading: 'Se te asignó un ticket', intro: 'Tenés un nuevo trabajo asignado. Abrí la app para ver el detalle, completar el checklist y subir la evidencia.', ticket }),
+    subject: `Nueva orden de trabajo asignada: ${ticket.num} — ${ticket.title}`,
+    html: layout({ heading: 'Se te asignó una orden de trabajo', intro: 'Tenés un nuevo trabajo asignado. Abrí la app para ver el detalle, completar el checklist y subir la evidencia.', ticket }),
   };
 }
 
 export function readyTpl(ticket: any) {
   return {
-    subject: `Ticket listo para revisión: ${ticket.num}`,
-    html: layout({ heading: 'Un ticket está listo para revisión', intro: 'El técnico marcó el trabajo como listo. Revisá la evidencia y aprobá o devolvé el ticket.', ticket }),
+    subject: `Orden de trabajo lista para revisión: ${ticket.num}`,
+    html: layout({ heading: 'Una orden de trabajo está lista para revisión', intro: 'El técnico marcó el trabajo como listo. Revisá la evidencia y aprobá o devolvé la orden.', ticket }),
   };
 }
 
@@ -145,14 +145,14 @@ export function rejectedTpl(ticket: any, comment: string) {
        </div>`
     : '';
   return {
-    subject: `Ticket devuelto para corrección: ${ticket.num}`,
-    html: layout({ heading: 'Tu ticket requiere corrección', intro: 'El administrador devolvió el ticket. Revisá el comentario, corregí lo indicado y volvé a enviarlo.', ticket, extraHtml: extra }),
+    subject: `Orden de trabajo devuelta para corrección: ${ticket.num}`,
+    html: layout({ heading: 'Tu orden de trabajo requiere corrección', intro: 'El administrador devolvió la orden. Revisá el comentario, corregí lo indicado y volvé a enviarla.', ticket, extraHtml: extra }),
   };
 }
 
 export function approvedTpl(ticket: any) {
   return {
-    subject: `Ticket aprobado: ${ticket.num}`,
+    subject: `Orden de trabajo aprobada: ${ticket.num}`,
     html: layout({ heading: '¡Tu trabajo fue aprobado!', intro: 'El administrador revisó y aprobó el trabajo. ¡Buen trabajo!', ticket }),
   };
 }

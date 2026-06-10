@@ -39,9 +39,11 @@ export const createTenant = onCall(async (req) => {
   return { ok: true, id };
 });
 
-/** Superadmin edits any tenant; a tenant admin can edit only branding/notifyEmail of their own. */
+const VALID_FEATURES = ['tickets', 'maintenance', 'inventory', 'wiki'];
+
+/** Superadmin edits any tenant; a tenant admin can edit branding/notifyEmail/features of their own. */
 export const updateTenant = onCall(async (req) => {
-  const { tenantId, name, active, branding, numbering, notifyEmail } = req.data || {};
+  const { tenantId, name, active, branding, numbering, notifyEmail, features, techEditAvailability, language } = req.data || {};
   if (!tenantId) throw new HttpsError('invalid-argument', 'tenantId es requerido.');
   const isSuper = req.auth?.token?.role === 'superadmin';
   if (!isSuper) {
@@ -73,6 +75,13 @@ export const updateTenant = onCall(async (req) => {
     };
   }
   if (typeof notifyEmail === 'string') patch.notifyEmail = notifyEmail.trim();
+  // Módulos que usa la empresa (gobierna panel admin + app del técnico). Lo edita el admin.
+  if (Array.isArray(features)) {
+    patch.features = [...new Set(features.filter((f: any) => VALID_FEATURES.includes(f)))];
+  }
+  if (typeof techEditAvailability === 'boolean') patch.techEditAvailability = techEditAvailability;
+  // Idioma de la empresa: lo fija el admin y aplica a todos los usuarios del tenant.
+  if (language === 'es' || language === 'en') patch.language = language;
   await ref.set(patch, { merge: true });
   return { ok: true };
 });

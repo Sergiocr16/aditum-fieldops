@@ -1,7 +1,7 @@
 /* © 2026 Aditum — Aditum FieldOps — Technician mobile: execute a service order */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../lib/firebase';
 import { useTenant } from '../../lib/tenant';
 import { Icon, Button, EmptyState, SOStatusBadge, toast, confirmDialog } from '../../components/ui';
@@ -58,13 +58,13 @@ export default function MobileServiceOrder({ ctx, id }: { ctx: AppCtx; id: strin
     await actions.update(so.id, { checklist: next } as any);
   };
 
-  const uploadImage = (path: string, file: File): Promise<{ path: string; url: string }> =>
-    new Promise((resolve, reject) => {
-      const task = uploadBytesResumable(storageRef(storage, path), file, { contentType: file.type });
-      task.on('state_changed', undefined, reject, async () => {
-        resolve({ path, url: await getDownloadURL(task.snapshot.ref) });
-      });
-    });
+  // Subida en una sola petición (uploadBytes): más robusta que el protocolo resumible
+  // contra el emulador y evita el cuelgue silencioso si getDownloadURL falla — cualquier
+  // error se propaga al catch del llamador y el finally limpia el spinner.
+  const uploadImage = async (path: string, file: File): Promise<{ path: string; url: string }> => {
+    const snap = await uploadBytes(storageRef(storage, path), file, { contentType: file.type });
+    return { path, url: await getDownloadURL(snap.ref) };
+  };
 
   const onItemPhoto = async (itemId: string, file: File) => {
     if (file.size > 20 * 1024 * 1024) {

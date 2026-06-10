@@ -1,7 +1,7 @@
 /* © 2026 Aditum — Aditum FieldOps — Technician mobile: client signature & service close */
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../lib/firebase';
 import { useTenant } from '../../lib/tenant';
 import { Icon, Button, Field, Input, EmptyState, toast } from '../../components/ui';
@@ -48,10 +48,8 @@ export default function MobileSignature({ ctx, id }: { ctx: AppCtx; id: string }
       const blob = await padRef.current.toBlob();
       if (!blob) throw new Error('No se pudo capturar la firma');
       const path = `tenants/${tid}/serviceOrders/${so.id}/firma-${Date.now()}.png`;
-      const url = await new Promise<string>((resolve, reject) => {
-        const task = uploadBytesResumable(storageRef(storage, path), blob, { contentType: 'image/png' });
-        task.on('state_changed', undefined, reject, async () => resolve(await getDownloadURL(task.snapshot.ref)));
-      });
+      const snap = await uploadBytes(storageRef(storage, path), blob, { contentType: 'image/png' });
+      const url = await getDownloadURL(snap.ref);
       await actions.complete(so.id, { name: name.trim(), idNumber: idNumber.trim(), path, url }, so.observations);
       toast(t('signature.done'), 'success');
       ctx.go('techOrders');

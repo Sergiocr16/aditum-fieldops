@@ -1,8 +1,9 @@
 /* © 2026 Aditum — Aditum FieldOps — Technician mobile: my service orders */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Icon, EmptyState, SOStatusBadge, LangSwitcher } from '../../components/ui';
+import { Icon, EmptyState, SOStatusBadge } from '../../components/ui';
 import { useMyServiceOrders } from '../../lib/serviceOrders';
+import { TechShell } from './MobileShell';
 import { today } from '../../lib/time';
 import type { AppCtx } from '../../lib/ctx';
 import type { ServiceOrder } from '../../lib/types';
@@ -66,23 +67,7 @@ export default function MobileServiceOrders({ ctx }: { ctx: AppCtx }) {
   const list = orders.filter(active.f);
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
-      <div style={{ background: 'var(--navy-800)', color: '#fff', padding: '14px 16px 16px', position: 'sticky', top: 0, zIndex: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => ctx.go('techDashboard')} style={{ border: 'none', background: 'rgba(255,255,255,.12)', color: '#fff', width: 38, height: 38, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
-            <Icon name="arrowLeft" size={19} />
-          </button>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>{t('mobileOrders.title')}</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,.55)' }}>{t('mobileOrders.sub')}</div>
-          </div>
-          <button onClick={() => ctx.go('techAvailability')} title={t('availability.title')} style={{ border: 'none', background: 'rgba(255,255,255,.12)', color: '#fff', width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Icon name="clock" size={17} />
-          </button>
-          <LangSwitcher dark />
-        </div>
-      </div>
-
+    <TechShell ctx={ctx} active="orders">
       <div className="m-chips">
         {tabs.map((tb) => {
           const n = orders.filter(tb.f).length;
@@ -104,6 +89,6 @@ export default function MobileServiceOrders({ ctx }: { ctx: AppCtx }) {
           </div>
         )}
       </div>
-    </div>
+    </TechShell>
   );
 }

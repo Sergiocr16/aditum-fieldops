@@ -206,6 +206,12 @@ export default function TicketsList({ ctx, onApprove, onReject, onReassign }: { 
                       <td className="mono" style={{ color: 'var(--text-2)', fontWeight: 500 }}>{tk.num}</td>
                       <td style={{ fontWeight: 600, maxWidth: 220 }}>
                         <div className="truncate">{tk.title}</div>
+                        {tk.requiresInvoice && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 99, ...(tk.invoiced ? { background: 'var(--st-apro-bg)', color: 'var(--st-apro-fg)' } : { background: 'var(--gold-50)', color: 'var(--gold-600)' }) }}>
+                            <Icon name={tk.invoiced ? 'checkCircle' : 'file'} size={11} />
+                            {tk.invoiced ? t('ticketBilling.invoicedShort') : t('ticketBilling.pendingShort')}
+                          </span>
+                        )}
                       </td>
                       <td style={{ color: 'var(--text-2)' }}>{tk.client}</td>
                       <td style={{ color: 'var(--text-2)', maxWidth: 150 }}>

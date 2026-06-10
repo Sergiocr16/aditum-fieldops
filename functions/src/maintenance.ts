@@ -16,6 +16,13 @@ export const setTechnicianAvailability = onCall(async (req) => {
   const canManageOthers = role === 'admin' || role === 'coordinador';
   if (!canManageOthers && role !== 'tech') throw new HttpsError('permission-denied', 'No autorizado.');
   if (!tenantId) throw new HttpsError('permission-denied', 'No autorizado.');
+  // El técnico solo edita su propia disponibilidad si la empresa lo habilita.
+  if (role === 'tech') {
+    const tSnap = await db().collection('tenants').doc(tenantId).get();
+    if (!tSnap.exists || (tSnap.data() as any).techEditAvailability !== true) {
+      throw new HttpsError('permission-denied', 'La edición de disponibilidad está deshabilitada para técnicos.');
+    }
+  }
   const targetId: string = canManageOthers && req.data?.techId ? String(req.data.techId) : req.auth.uid;
   const userSnap = await db().collection('users').doc(targetId).get();
   if (!userSnap.exists || (userSnap.data() as any).tenantId !== tenantId) {

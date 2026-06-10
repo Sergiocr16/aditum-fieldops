@@ -55,23 +55,30 @@ export default function Uploader({ ticket, ctx, kind, by }: { ticket: Ticket; ct
         toast(err.message, 'error');
       },
       async () => {
-        if (isVideo) setPhase('finalize'); // server function compresses & generates thumbnail
-        const url = await getDownloadURL(task.snapshot.ref);
-        const entry: Evidence = {
-          id: fileId,
-          path,
-          file: url,
-          type: evType,
-          name: file.name,
-          size: file.size,
-          desc: isVideo ? t('mobile.videoUploaded') : t('mobile.photoUploaded'),
-          by,
-          date: now(),
-          status: evType === 'video' ? 'processing' : 'ready',
-        };
-        await ctx.updateTicket(ticket.id, { evidence: [...ticket.evidence, entry] });
-        setProgress(null);
-        toast(isVideo ? t('mobile.videoUploaded') : t('mobile.photoUploaded'), 'success');
+        // try/catch: si getDownloadURL o updateTicket fallan, mostramos el error y
+        // limpiamos el progreso en vez de dejar el spinner colgado para siempre.
+        try {
+          if (isVideo) setPhase('finalize'); // server function compresses & generates thumbnail
+          const url = await getDownloadURL(task.snapshot.ref);
+          const entry: Evidence = {
+            id: fileId,
+            path,
+            file: url,
+            type: evType,
+            name: file.name,
+            size: file.size,
+            desc: isVideo ? t('mobile.videoUploaded') : t('mobile.photoUploaded'),
+            by,
+            date: now(),
+            status: evType === 'video' ? 'processing' : 'ready',
+          };
+          await ctx.updateTicket(ticket.id, { evidence: [...ticket.evidence, entry] });
+          toast(isVideo ? t('mobile.videoUploaded') : t('mobile.photoUploaded'), 'success');
+        } catch (e: any) {
+          toast(e?.message || 'Error', 'error');
+        } finally {
+          setProgress(null);
+        }
       }
     );
   };

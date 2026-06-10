@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { collection, doc, onSnapshot, type CollectionReference, type DocumentReference } from 'firebase/firestore';
 import { db } from './firebase';
 import { useAuth } from './auth';
+import i18n from '../i18n';
 import type { Tenant } from './types';
 
 interface TenantState {
@@ -61,6 +62,15 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       root.style.removeProperty('--gold');
     };
   }, [tenant?.branding?.primaryColor, tenant?.branding?.accentColor]);
+
+  // Idioma de la empresa: lo fija el admin y manda para todos los usuarios del tenant.
+  useEffect(() => {
+    const lang = tenant?.language;
+    if (lang && i18n.resolvedLanguage !== lang) {
+      i18n.changeLanguage(lang);
+      document.documentElement.lang = lang;
+    }
+  }, [tenant?.language]);
 
   // A deactivated tenant logs everyone out.
   useEffect(() => {

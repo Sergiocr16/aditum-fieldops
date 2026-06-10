@@ -100,7 +100,7 @@ export function useBillingOrders(tab: 'pendiente' | 'facturado') {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user || !tid || user.role !== 'admin') {
+    if (!user || !tid || (user.role !== 'admin' && user.role !== 'facturacion')) {
       setLoading(false);
       return;
     }

@@ -48,6 +48,7 @@ export interface TenantDoc {
   numbering: TenantNumbering;
   notifyEmail: string;
   smtpStatus: 'unset' | 'verified' | 'error';
+  language?: 'es' | 'en';
   createdAt: string;
   updatedAt: string;
   createdBy?: string;

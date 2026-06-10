@@ -123,9 +123,16 @@ export default function BillingInbox({ ctx }: { ctx: AppCtx }) {
                   {tab === 'pendiente' && (
                     <td><input type="checkbox" checked={selected.has(i.id)} onChange={() => toggle(i.id)} /></td>
                   )}
-                  <td className="mono" style={{ fontWeight: 700 }}>{i.soNum}</td>
+                  <td className="mono" style={{ fontWeight: 700 }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                      {i.soNum}
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99, letterSpacing: '.02em', ...(i.kind === 'ticket' ? { background: 'var(--gold-50)', color: 'var(--gold-600)' } : { background: 'var(--surface-2)', color: 'var(--text-2)' }) }}>
+                        {i.kind === 'ticket' ? t('ticketBilling.kindTicket') : t('ticketBilling.kindSo')}
+                      </span>
+                    </span>
+                  </td>
                   <td className="mono" style={{ fontSize: 12.5 }}>
-                    {contracts.find((c) => c.id === i.contractId)?.num || '—'}
+                    {i.kind === 'ticket' ? '—' : (contracts.find((c) => c.id === i.contractId)?.num || '—')}
                     <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{i.licitacionNum}</div>
                   </td>
                   <td>{i.clientName}</td>
@@ -135,6 +142,11 @@ export default function BillingInbox({ ctx }: { ctx: AppCtx }) {
                   <td style={{ textAlign: 'right' }}>
                     {i.serviceOrderId && (
                       <button className="icon-btn" style={{ width: 30, height: 30 }} title={t('serviceOrders.title')} onClick={() => ctx.go('soDetail', { id: i.serviceOrderId })}>
+                        <Icon name="external" size={14} />
+                      </button>
+                    )}
+                    {i.ticketId && (
+                      <button className="icon-btn" style={{ width: 30, height: 30 }} title={t('nav.ticketDetail')} onClick={() => ctx.go('ticketDetail', { id: i.ticketId })}>
                         <Icon name="external" size={14} />
                       </button>
                     )}

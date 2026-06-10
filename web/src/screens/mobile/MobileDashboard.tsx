@@ -1,8 +1,11 @@
 /* © 2026 Aditum — Aditum FieldOps — Technician mobile dashboard */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Icon, Avatar, StatusBadge, PriorityChip, EmptyState, LangSwitcher } from '../../components/ui';
+import { Icon, StatusBadge, PriorityChip, EmptyState } from '../../components/ui';
+import { useTenant } from '../../lib/tenant';
+import { tenantHasFeature } from '../../lib/modules';
 import { today } from '../../lib/time';
+import { TechShell } from './MobileShell';
 import type { AppCtx } from '../../lib/ctx';
 import type { Ticket } from '../../lib/types';
 
@@ -61,6 +64,13 @@ function MobileTicketCard({ t: tk, onClick }: { t: Ticket; onClick: () => void }
 
 export default function TechDashboard({ ctx }: { ctx: AppCtx }) {
   const { t } = useTranslation();
+  const { tenant } = useTenant();
+  const featTickets = tenantHasFeature('tickets', tenant?.features);
+  const featMaint = tenantHasFeature('maintenance', tenant?.features);
+  // Empresa solo-mantenimiento: el técnico no usa tickets → su home son las OS.
+  useEffect(() => {
+    if (!featTickets && featMaint) ctx.go('techOrders');
+  }, [featTickets, featMaint]);
   const mine = ctx.db.tickets; // store already filters tickets to the technician
   const tabs = [
     { key: 'todos', label: t('mobile.tabAll'), f: () => true },
@@ -76,36 +86,7 @@ export default function TechDashboard({ ctx }: { ctx: AppCtx }) {
   const counts = (f: (x: Ticket) => boolean) => mine.filter(f).length;
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
-      <div style={{ background: 'var(--navy-800)', color: '#fff', padding: '14px 16px 16px', position: 'sticky', top: 0, zIndex: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <img src="/assets/aditum-horizontal.png" style={{ height: 24, filter: 'brightness(0) invert(1)' }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <LangSwitcher dark />
-            <button onClick={() => ctx.go('techOrders')} title={t('mobileOrders.title')} style={{ border: 'none', background: 'rgba(255,255,255,.12)', color: '#fff', width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name="calendar" size={17} />
-            </button>
-            <button onClick={() => ctx.go('techWiki')} title={t('wiki.title')} style={{ border: 'none', background: 'rgba(255,255,255,.12)', color: '#fff', width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name="file" size={17} />
-            </button>
-            <button onClick={ctx.logout} style={{ border: 'none', background: 'rgba(255,255,255,.12)', color: '#fff', width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name="logout" size={17} />
-            </button>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-          <Avatar initials={ctx.admin.initials} size={42} gold />
-          <div>
-            <div style={{ fontSize: 13, color: 'rgba(255,255,255,.6)' }}>{t('mobile.hi')}</div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>{ctx.admin.name.split(' ')[0]} 👋</div>
-          </div>
-          <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-            <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1, color: 'var(--gold)' }}>{counts((x) => x.status !== 'aprobado' && x.status !== 'cerrado')}</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.6)' }}>{t('mobile.activeCount')}</div>
-          </div>
-        </div>
-      </div>
-
+    <TechShell ctx={ctx} active="tickets">
       <div className="m-chips">
         {tabs.map((tb) => {
           const n = counts(tb.f);
@@ -127,6 +108,6 @@ export default function TechDashboard({ ctx }: { ctx: AppCtx }) {
           </div>
         )}
       </div>
-    </div>
+    </TechShell>
   );
 }
