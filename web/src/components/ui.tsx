@@ -1,5 +1,5 @@
 /* © 2026 Aditum — Aditum FieldOps — Shared UI components (ported from Claude Design) */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { STATUS, SO_STATUS, PRIORITY, PRIORITY_COLOR, TIMELINE_COLOR } from '../lib/config';
 import { setLang } from '../i18n';
@@ -422,6 +422,61 @@ export function Select({ children, ...rest }: any) {
 }
 export function Toggle({ on, onClick }: any) {
   return <button className={'toggle' + (on ? ' on' : '')} onClick={onClick} aria-pressed={on} />;
+}
+
+/* ---------------- SearchSelect (combobox con búsqueda, para catálogos grandes) ---------------- */
+export function SearchSelect({ value, items = [], search, toCode, toLabel, placeholder, onPick, emptyHint, loadingHint }: any) {
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const selected = value ? (items as any[]).find((it) => toCode(it) === value) : null;
+  const selectedLabel = selected ? `${toCode(selected)} · ${toLabel(selected)}` : (value || '');
+  const results: any[] = open ? search(q) : [];
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => { if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <div className="input-ico">
+        <Icon name="search" size={16} />
+        <input
+          className="input"
+          placeholder={placeholder}
+          value={open ? q : selectedLabel}
+          onFocus={() => { setQ(''); setOpen(true); }}
+          onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+        />
+      </div>
+      {value && !open && (
+        <button type="button" onMouseDown={(e) => { e.preventDefault(); onPick(null); }} aria-label="clear"
+          style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-3)', display: 'flex' }}>
+          <Icon name="x" size={14} />
+        </button>
+      )}
+      {open && (
+        <div style={{ position: 'absolute', zIndex: 30, left: 0, right: 0, top: 'calc(100% + 4px)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: '0 8px 24px rgba(15,23,42,.14)', maxHeight: 300, overflowY: 'auto' }}>
+          {results.length === 0 ? (
+            <div style={{ padding: '10px 12px', fontSize: 13, color: 'var(--text-3)' }}>{q ? (emptyHint || '—') : (items.length ? '' : (loadingHint || '…'))}</div>
+          ) : (
+            results.map((it) => (
+              <button key={toCode(it)} type="button"
+                onMouseDown={(e) => { e.preventDefault(); onPick(it); setOpen(false); setQ(''); }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '9px 12px', cursor: 'pointer', fontSize: 13, borderBottom: '1px solid var(--border)' }}
+                onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = 'var(--surface-2)')}
+                onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = 'transparent')}>
+                <span className="mono" style={{ color: 'var(--navy-700)', fontWeight: 600 }}>{toCode(it)}</span>
+                <span style={{ color: 'var(--text-2)', marginLeft: 8 }}>{toLabel(it)}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ---------------- Stepper (− value +) ---------------- */

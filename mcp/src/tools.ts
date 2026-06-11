@@ -14,6 +14,9 @@ import {
   validateEquipment,
   buildWikiPageDoc,
   validateWikiPage,
+  buildClientDoc,
+  validateClient,
+  NewClientInput,
   nowCR,
   addMonthsCR,
   addDaysCR,
@@ -1402,4 +1405,102 @@ export function registerTools(server: McpServer, db: Db, tenantId: string, actor
       return ok(rows.map((m) => ({ at: m.at, product: m.productName, qty: m.qty, ticket: m.ticketNum, location: [m.client, m.site].filter(Boolean).join(' · '), tech: m.techName })));
     }
   );
+
+  /* ---------------- clientes receptores (facturación electrónica) ---------------- */
+  const identKey = (ident: string) => String(ident || '').trim().toLowerCase().replace(/[\s-]/g, '');
+  async function findClient(idOrIdent: string) {
+    const direct = await tcol('clients').doc(idOrIdent).get();
+    if (direct.exists) return direct;
+    const snap = await tcol('clients').get();
+    const key = identKey(idOrIdent);
+    return snap.docs.find((d) => identKey((d.data() as any).identNumber) === key) || null;
+  }
+
+  /** Hace upsert de un cliente por número de identificación. Devuelve {id, created|updated}. */
+  async function upsertClient(input: NewClientInput): Promise<{ ok: boolean; id?: string; created?: boolean; updated?: boolean; errors?: string[] }> {
+    const errs = validateClient(input);
+    if (errs.length) return { ok: false, errors: errs };
+    const key = identKey(input.identNumber);
+    const snap = await tcol('clients').get();
+    const existing = snap.docs.find((d) => identKey((d.data() as any).identNumber) === key);
+    const doc: any = buildClientDoc(input, BY);
+    if (existing) {
+      delete doc.createdAt; // conservar la fecha de creación original
+      await existing.ref.set(doc, { merge: true });
+      return { ok: true, id: existing.id, updated: true };
+    }
+    const ref = await tcol('clients').add(doc);
+    return { ok: true, id: ref.id, created: true };
+  }
+
+  server.tool('clients_list', 'Lista los clientes receptores (datos fiscales para facturación electrónica).', {}, async () => {
+    const snap = await tcol('clients').get();
+    return ok(snap.docs.map((d) => { const c = d.data() as any; return { id: d.id, name: c.name, identType: c.identType, identNumber: c.identNumber, email: c.email, comercialName: c.comercialName || '', active: c.active !== false }; }));
+  });
+
+  server.tool(
+    'clients_upsert',
+    'Crea o actualiza un cliente receptor (upsert por número de identificación). identType: 1=céd. física, 2=jurídica, 3=DIMEX, 4=NITE.',
+    {
+      name: z.string(),
+      identType: z.number().describe('1=física, 2=jurídica, 3=DIMEX, 4=NITE'),
+      identNumber: z.string(),
+      email: z.string(),
+      comercialName: z.string().optional(),
+      ccEmails: z.string().optional(),
+      activityCode: z.string().optional(),
+      direction: z.string().optional(),
+      province: z.number().optional(),
+      canton: z.number().optional(),
+      district: z.number().optional(),
+      neighborhood: z.number().optional(),
+      internalCode: z.string().optional(),
+    },
+    async (args) => ok(await upsertClient(args as NewClientInput))
+  );
+
+  server.tool(
+    'clients_import',
+    'Importa una lista de clientes receptores en lote (upsert por número de identificación).',
+    {
+      clients: z
+        .array(
+          z.object({
+            name: z.string(),
+            identType: z.number(),
+            identNumber: z.string(),
+            email: z.string(),
+            comercialName: z.string().optional(),
+            ccEmails: z.string().optional(),
+            activityCode: z.string().optional(),
+            direction: z.string().optional(),
+            province: z.number().optional(),
+            canton: z.number().optional(),
+            district: z.number().optional(),
+            neighborhood: z.number().optional(),
+            internalCode: z.string().optional(),
+          })
+        )
+        .describe('Lista de clientes a importar'),
+    },
+    async (args) => {
+      let created = 0;
+      let updated = 0;
+      const errors: any[] = [];
+      for (const c of args.clients) {
+        const res = await upsertClient(c as NewClientInput);
+        if (!res.ok) errors.push({ identNumber: c.identNumber, errors: res.errors });
+        else if (res.created) created++;
+        else updated++;
+      }
+      return ok({ ok: errors.length === 0, created, updated, errors });
+    }
+  );
+
+  server.tool('clients_delete', 'Elimina un cliente receptor (por id o número de identificación).', { client: z.string().describe('id o número de identificación') }, async (args) => {
+    const doc = await findClient(args.client);
+    if (!doc) return ok({ ok: false, error: 'cliente no encontrado' });
+    await doc.ref.delete();
+    return ok({ ok: true });
+  });
 }

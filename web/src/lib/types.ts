@@ -237,6 +237,109 @@ export interface InvoiceItem {
   invoicedAt?: string;
   invoiceNote?: string;
   amount: number | null;
+  // Facturación electrónica (GTI): receptor + tipo de cargo + moneda capturados en la OT.
+  chargeTypeId?: string | null;
+  clientId?: string | null;
+  currency?: 'CRC' | 'USD';
+  description?: string;
+  createdAt: string;
+}
+
+/* ---------------- facturación electrónica (GTI) ---------------- */
+
+export type FiscalCurrency = 'CRC' | 'USD';
+
+/** Receptor fiscal (cliente al que se factura). Reusable entre órdenes. */
+export interface Client {
+  id: string;
+  name: string;
+  identType: number;       // 1=céd. física, 2=jurídica, 3=DIMEX, 4=NITE
+  identNumber: string;
+  comercialName?: string;
+  email: string;
+  ccEmails?: string;
+  activityCode?: string;
+  province?: number | null;
+  canton?: number | null;
+  district?: number | null;
+  neighborhood?: number | null;
+  direction?: string;
+  internalCode?: string;
+  active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** Tipo de cargo facturable ("account type"). */
+export interface ChargeType {
+  id: string;
+  name: string;
+  code?: string;
+  cabysCode?: string;
+  emitIva: boolean;        // true = gravado 13% (tarifa 8); false = no sujeto (tarifa 11)
+  issuesDocument: boolean; // ¿emite documento electrónico?
+  active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** Línea de una factura manual (compositor). */
+export interface InvoiceLine {
+  description: string;
+  chargeTypeId?: string | null;
+  cabys?: string | null;
+  prodServCode?: string | null;
+  emitIva: boolean;
+  amount: number;        // monto base (IVA encima)
+  ivaIncluded?: boolean; // false en facturas manuales
+}
+
+/** Factura consolidada (FC-####) con tracking de emisión electrónica. */
+export interface Invoice {
+  id: string;
+  num: string;
+  itemIds: string[];
+  itemCount: number;
+  contractIds?: (string | null)[];
+  clientNames: string[];
+  receptorId?: string | null;
+  currency?: FiscalCurrency;
+  subtotal?: number;
+  tax?: number;
+  total?: number;
+  note: string;
+  status: string;
+  /** Factura manual hecha por líneas (compositor). */
+  manual?: boolean;
+  lines?: InvoiceLine[];
+  // Emisión GTI
+  isElectronicBillSend?: boolean;
+  electronicBillStatus?: string;
+  electronicBillResponse?: string;
+  referenceNumber?: string | null; // consecutivo
+  numericKey?: string | null;       // clave numérica
+  emittedAt?: string | null;
+  creditedAt?: string | null;
+  creditNoteId?: string | null;
+  creditedAmount?: number;
+  createdAt: string;
+  createdBy?: string;
+}
+
+export interface CreditNote {
+  id: string;
+  canceledInvoiceId: string;
+  canceledInvoiceNum?: string;
+  receptorId?: string | null;
+  amount: number;
+  reason: string;
+  currency?: FiscalCurrency;
+  total?: number;
+  isElectronicBillSend?: boolean;
+  electronicBillStatus?: string;
+  electronicBillResponse?: string;
+  referenceNumber?: string | null;
+  numericKey?: string | null;
   createdAt: string;
 }
 
@@ -451,6 +554,11 @@ export interface Ticket {
   invoicedAt?: string | null;
   invoiceNum?: string;
   invoiceNote?: string;
+  // Facturación electrónica (GTI): datos capturados en la OT.
+  clientId?: string | null;       // receptor fiscal
+  chargeTypeId?: string | null;   // tipo de cargo
+  billAmount?: number | null;     // monto (IVA incluido)
+  billCurrency?: 'CRC' | 'USD';
   // Trabajos de varios días: una sola orden con varias visitas (un día = una visita).
   visits?: Visit[];
 }

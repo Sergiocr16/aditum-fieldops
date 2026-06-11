@@ -17,8 +17,8 @@ export interface ModuleDef {
 }
 
 /** Módulos que usa la empresa (a nivel tenant). Ausente = todos activos. */
-export type TenantFeature = 'tickets' | 'maintenance' | 'inventory' | 'wiki';
-export const TENANT_FEATURES: TenantFeature[] = ['tickets', 'maintenance', 'inventory', 'wiki'];
+export type TenantFeature = 'tickets' | 'maintenance' | 'inventory' | 'wiki' | 'fiscal';
+export const TENANT_FEATURES: TenantFeature[] = ['tickets', 'maintenance', 'inventory', 'wiki', 'fiscal'];
 
 export const MODULES: ModuleDef[] = [
   // Orden: panorama → trabajo operativo (OT, OS, calendario) → cadena de mantenimiento
@@ -30,7 +30,8 @@ export const MODULES: ModuleDef[] = [
   { key: 'contracts', labelKey: 'contracts.nav', icon: 'file', route: 'contracts', routes: ['contracts', 'contractForm', 'contractDetail'], feature: 'maintenance' },
   { key: 'equipment', labelKey: 'equipment.nav', icon: 'cpu', route: 'equipment', routes: ['equipment', 'equipmentTypes', 'templateEditor'], feature: 'maintenance' },
   { key: 'inventory', labelKey: 'inventory.nav', icon: 'box', route: 'inventory', routes: ['inventory'], feature: 'inventory' },
-  { key: 'billing', labelKey: 'billing.nav', icon: 'receipt', route: 'billing', routes: ['billing'], feature: 'maintenance' },
+  { key: 'billing', labelKey: 'billing.nav', icon: 'receipt', route: 'billing', routes: ['billing', 'invoiceNew', 'invoiceDetail'], feature: 'maintenance' },
+  { key: 'fiscalSettings', labelKey: 'gti.menuNav', icon: 'file', route: 'fiscalHub', routes: ['fiscalHub', 'gtiSettings', 'chargeTypes', 'clients'], feature: 'fiscal' },
   { key: 'technicians', labelKey: 'nav.technicians', icon: 'users', route: 'technicians', routes: ['technicians'] },
   { key: 'wiki', labelKey: 'wiki.nav', icon: 'book', route: 'wiki', routes: ['wiki', 'wikiForm'], feature: 'wiki' },
   { key: 'notifySettings', labelKey: 'notifySettings.nav', icon: 'sliders', route: 'notifySettings', routes: ['notifySettings'], feature: 'maintenance' },

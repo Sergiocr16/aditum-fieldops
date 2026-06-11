@@ -40,7 +40,7 @@ export const createTenant = onCall(async (req) => {
   return { ok: true, id };
 });
 
-const VALID_FEATURES = ['tickets', 'maintenance', 'inventory', 'wiki'];
+const VALID_FEATURES = ['tickets', 'maintenance', 'inventory', 'wiki', 'fiscal'];
 
 /** Superadmin edits any tenant; a tenant admin can edit branding/notifyEmail/features of their own. */
 export const updateTenant = onCall(async (req) => {

@@ -161,8 +161,30 @@ service cloud.firestore {
         allow read:  if isOps(tid) || isFact(tid);
         allow write: if isAdmin(tid) || isFact(tid);
       }
+      // Notas de crédito: las leen ops/facturación; se crean/actualizan solo vía
+      // callable (Admin SDK) durante la emisión electrónica.
+      match /creditNotes/{id} {
+        allow read: if isOps(tid) || isFact(tid);
+        allow create, update, delete: if false; // solo Functions
+      }
+
+      // ---------- facturación electrónica (GTI) ----------
+      // Receptores fiscales y tipos de cargo: los leen ops/facturación; los gestiona el admin.
+      match /clients/{id} {
+        allow read:  if isOps(tid) || isFact(tid);
+        allow write: if isAdmin(tid);
+      }
+      match /chargeTypes/{id} {
+        allow read:  if isOps(tid) || isFact(tid);
+        allow write: if isAdmin(tid);
+      }
 
       // ---------- settings ----------
+      // Credenciales GTI: las escribe solo el callable saveGtiConfig (clave cifrada).
+      match /settings/gti {
+        allow read:  if isAdmin(tid);
+        allow write: if false;
+      }
       // SMTP config is written only by the saveSmtpConfig callable (password ciphertext).
       match /settings/smtp {
         allow read:  if isAdmin(tid);

@@ -38,6 +38,15 @@ export const consolidateInvoiceItems = onCall(async (req) => {
     const invoiceNum = 'FC-' + next;
     const at = nowCR();
 
+    // Facturación electrónica: si todos los ítems comparten receptor (clientId),
+    // la factura queda emitible (receptorId + moneda). Si no, se consolida igual
+    // pero sin receptor (no se puede emitir hasta corregirlo).
+    const receptorIds = [...new Set(items.map((it) => it.data.clientId).filter(Boolean))] as string[];
+    const receptorId = receptorIds.length === 1 ? receptorIds[0] : null;
+    const currencies = [...new Set(items.map((it) => it.data.currency).filter(Boolean))] as string[];
+    const currency = currencies.length === 1 ? currencies[0] : 'CRC';
+    const total = items.reduce((s, it) => s + (Number(it.data.amount) || 0), 0);
+
     tx.set(counterRef, { value: next }, { merge: true });
     tx.set(invoiceRef, {
       num: invoiceNum,
@@ -45,8 +54,13 @@ export const consolidateInvoiceItems = onCall(async (req) => {
       itemCount: items.length,
       contractIds: [...new Set(items.map((it) => it.data.contractId))],
       clientNames: [...new Set(items.map((it) => it.data.clientName))],
+      receptorId,
+      currency,
+      total: Math.round(total * 100) / 100,
       note: String(note || '').slice(0, 200),
       status: 'facturada',
+      isElectronicBillSend: false,
+      electronicBillStatus: receptorId ? 'PENDING' : 'NO_RECEPTOR',
       createdAt: at,
       createdBy: ctx.uid,
     });

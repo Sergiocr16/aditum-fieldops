@@ -32,6 +32,12 @@ import ServiceOrders from './screens/admin/ServiceOrders';
 import ServiceOrderDetail from './screens/admin/ServiceOrderDetail';
 import TemplateEditor from './screens/admin/TemplateEditor';
 import BillingInbox from './screens/admin/BillingInbox';
+import FiscalHub from './screens/admin/FiscalHub';
+import InvoiceComposer from './screens/admin/InvoiceComposer';
+import InvoiceDetail from './screens/admin/InvoiceDetail';
+import Clients from './screens/admin/Clients';
+import GtiSettings from './screens/admin/GtiSettings';
+import ChargeTypes from './screens/admin/ChargeTypes';
 import MobileServiceOrders from './screens/mobile/MobileServiceOrders';
 import MobileServiceOrder from './screens/mobile/MobileServiceOrder';
 import MobileCalendar from './screens/mobile/MobileCalendar';
@@ -152,6 +158,12 @@ function AuthedApp() {
     else if (route === 'soDetail') inner = <ServiceOrderDetail ctx={ctx} id={params.id} />;
     else if (route === 'templateEditor') inner = <TemplateEditor ctx={ctx} typeId={params.typeId} />;
     else if (route === 'billing') inner = <BillingInbox ctx={ctx} />;
+    else if (route === 'invoiceNew') inner = <InvoiceComposer ctx={ctx} itemIds={params.itemIds} />;
+    else if (route === 'invoiceDetail') inner = <InvoiceDetail ctx={ctx} id={params.id} />;
+    else if (route === 'fiscalHub') inner = <FiscalHub ctx={ctx} />;
+    else if (route === 'clients') inner = <Clients ctx={ctx} />;
+    else if (route === 'gtiSettings') inner = <GtiSettings ctx={ctx} />;
+    else if (route === 'chargeTypes') inner = <ChargeTypes ctx={ctx} />;
     else if (route === 'notifySettings') inner = <NotifySettings ctx={ctx} />;
     else if (route === 'calendar') inner = <ServiceCalendar ctx={ctx} />;
     return (

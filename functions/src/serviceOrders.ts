@@ -241,7 +241,12 @@ export const onServiceOrderWritten = onDocumentWritten(
               serviceDate: (d.finishedAt || at).slice(0, 10),
               status: 'pendiente',
               invoiceId: null,
-              amount: null,
+              // Facturación electrónica: receptor/tipo/monto se completan luego en la bandeja.
+              amount: typeof d.billAmount === 'number' ? d.billAmount : null,
+              chargeTypeId: d.chargeTypeId || null,
+              clientId: d.clientId || null,
+              currency: d.billCurrency === 'USD' ? 'USD' : 'CRC',
+              description: [d.equipmentSnapshot?.typeName, d.equipmentSnapshot?.brand].filter(Boolean).join(' · ') || d.num,
               createdAt: at,
             });
             tx.set(ref, {

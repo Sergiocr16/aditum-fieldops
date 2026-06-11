@@ -554,6 +554,108 @@ export function buildVisit(
   };
 }
 
+/* ---------------- facturación electrónica (GTI / Hacienda CR) ---------------- */
+
+/** Moneda del documento electrónico. GTI: 1=CRC, 2=USD. */
+export type FiscalCurrency = 'CRC' | 'USD';
+export const FISCAL_CURRENCIES: FiscalCurrency[] = ['CRC', 'USD'];
+/** Código `Moneda` de GTI para cada divisa. */
+export const GTI_CURRENCY_CODE: Record<FiscalCurrency, number> = { CRC: 1, USD: 2 };
+
+/** Catálogo de tipos de identificación fiscal de Hacienda (código → clave i18n).
+    Coincide con `Receptor.TipoIdent` de GTI. */
+export const ELECTRONIC_BILL_IDENT_TYPES = [
+  { code: 1, key: 'cedulaFisica' },
+  { code: 2, key: 'cedulaJuridica' },
+  { code: 3, key: 'dimex' },
+  { code: 4, key: 'nite' },
+  { code: 10, key: 'extranjera' },
+] as const;
+export const IDENT_TYPE_CODES: number[] = ELECTRONIC_BILL_IDENT_TYPES.map((t) => t.code);
+
+/** Receptor fiscal (cliente al que se factura). Reusable entre órdenes de trabajo. */
+export interface NewClientInput {
+  name: string;
+  identType: number;        // 1=céd. física, 2=jurídica, 3=DIMEX, 4=NITE
+  identNumber: string;
+  comercialName?: string;
+  email: string;
+  ccEmails?: string;        // copias separadas por coma/; opcional
+  activityCode?: string;    // actividad económica del receptor (opcional)
+  province?: number | null; // división territorial (códigos numéricos de Hacienda) — opcionales
+  canton?: number | null;
+  district?: number | null;
+  neighborhood?: number | null;
+  direction?: string;
+  internalCode?: string;
+}
+
+export function validateClient(input: NewClientInput): string[] {
+  const errors: string[] = [];
+  if (!input || typeof input !== 'object') return ['Invalid payload'];
+  if (!input.name?.trim()) errors.push('name is required');
+  if (!IDENT_TYPE_CODES.includes(Number(input.identType))) errors.push('invalid identType');
+  if (!String(input.identNumber || '').trim()) errors.push('identNumber is required');
+  if (!input.email?.trim() || !/.+@.+\..+/.test(input.email)) errors.push('valid email is required');
+  return errors;
+}
+
+export function buildClientDoc(input: NewClientInput, by: string) {
+  const ts = nowCR();
+  const numOrNull = (v: any) => (v == null || v === '' || isNaN(Number(v)) ? null : Number(v));
+  return {
+    name: input.name.trim(),
+    identType: Number(input.identType),
+    identNumber: String(input.identNumber).trim(),
+    comercialName: (input.comercialName || '').trim().slice(0, 80),
+    email: input.email.trim(),
+    ccEmails: (input.ccEmails || '').trim(),
+    activityCode: (input.activityCode || '').trim(),
+    province: numOrNull(input.province),
+    canton: numOrNull(input.canton),
+    district: numOrNull(input.district),
+    neighborhood: numOrNull(input.neighborhood),
+    direction: (input.direction || '').trim().slice(0, 160),
+    internalCode: (input.internalCode || '').trim(),
+    active: true,
+    createdAt: ts,
+    updatedAt: ts,
+    createdBy: by,
+  };
+}
+
+/** Tipo de cargo facturable ("account type"): controla si emite documento,
+    si es gravado (IVA 13%) o no sujeto, y su código CABYS. */
+export interface NewChargeTypeInput {
+  name: string;
+  code?: string;        // código interno → CodProdServ
+  cabysCode?: string;   // código CABYS de Hacienda (opcional)
+  emitIva?: boolean;    // true = gravado tarifa 8 (13%); false = no sujeto tarifa 11 (0%)
+  issuesDocument?: boolean; // ¿este tipo emite documento electrónico?
+}
+
+export function validateChargeType(input: NewChargeTypeInput): string[] {
+  const errors: string[] = [];
+  if (!input || typeof input !== 'object') return ['Invalid payload'];
+  if (!input.name?.trim()) errors.push('name is required');
+  return errors;
+}
+
+export function buildChargeTypeDoc(input: NewChargeTypeInput, by: string) {
+  const ts = nowCR();
+  return {
+    name: input.name.trim(),
+    code: (input.code || '').trim(),
+    cabysCode: (input.cabysCode || '').trim(),
+    emitIva: input.emitIva !== false,            // por defecto gravado
+    issuesDocument: input.issuesDocument !== false, // por defecto emite
+    active: true,
+    createdAt: ts,
+    updatedAt: ts,
+    createdBy: by,
+  };
+}
+
 /* ---------------- Wiki ---------------- */
 export interface NewWikiPageInput {
   title: string;

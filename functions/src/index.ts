@@ -24,6 +24,7 @@ export { dailyMaintenanceJob, runMaintenanceScheduler } from './scheduler';
 export { startServiceOrder, completeServiceOrder, onServiceOrderWritten } from './serviceOrders';
 export { getPublicServiceOrder, confirmServiceOrder, getTechnicianSlots, holdSlot, rescheduleServiceOrder, getPublicServiceReport } from './publicFlow';
 export { consolidateInvoiceItems, exportInvoiceCsv } from './billing';
+export { saveGtiConfig, testGtiConfig, emitElectronicInvoice, createManualInvoice, emitCreditNote, resendFiscalEmail, queryFiscalStatus, pollFiscalStatus } from './fiscal';
 
 /* ------------------------- helpers ------------------------- */
 function genPassword() {
@@ -134,7 +135,7 @@ export const resetTechnicianPassword = onCall(async (req) => {
 });
 
 /* ------------------------- admin module permissions ------------------------- */
-const VALID_MODULES = ['tickets', 'technicians', 'contracts', 'equipment', 'serviceOrders', 'calendar', 'billing', 'inventory', 'wiki', 'notifySettings'];
+const VALID_MODULES = ['tickets', 'technicians', 'contracts', 'equipment', 'serviceOrders', 'calendar', 'billing', 'inventory', 'wiki', 'notifySettings', 'fiscalSettings'];
 
 /** Define qué módulos ve un admin del mismo tenant. Lista vacía = ve todos.
     Solo aplica a usuarios con rol 'admin'. */
@@ -469,7 +470,12 @@ export const onTicketWritten = onDocumentWritten(
             serviceDate: (td.readyAt || at).slice(0, 10),
             status: 'pendiente',
             invoiceId: null,
-            amount: null,
+            // Facturación electrónica: datos capturados en la OT (receptor + tipo de cargo + monto).
+            amount: typeof td.billAmount === 'number' ? td.billAmount : null,
+            chargeTypeId: td.chargeTypeId || null,
+            clientId: td.clientId || null,
+            currency: td.billCurrency === 'USD' ? 'USD' : 'CRC',
+            description: td.title || '',
             createdAt: at,
           });
           tx.set(ticketRef, { billingApplied: true, invoiceItemId: itemRef.id }, { merge: true });
