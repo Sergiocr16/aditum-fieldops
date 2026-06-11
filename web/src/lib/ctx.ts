@@ -8,7 +8,7 @@ export interface AppCtx {
   admin: { name: string; email: string; role: string; initials: string; uid: string };
   updateTicket: (id: string, patch: Partial<Ticket>) => void | Promise<void>;
   addTicket: (data: Partial<Ticket>) => Promise<string>;
-  addTechnician: (data: { name: string; email: string; phone?: string; password: string; role?: string }) => Promise<{ uid: string; password: string }>;
+  addTechnician: (data: { name: string; email: string; phone?: string; password: string; roles?: string[] }) => Promise<{ uid: string; password: string }>;
   updateTechnician: (id: string, patch: Partial<AppUser>) => void | Promise<void>;
   resetTechnicianPassword: (id: string) => Promise<{ password: string }>;
   sendPublicLink: (ticketId: string, to: string, cc?: string, message?: string) => Promise<{ url: string }>;

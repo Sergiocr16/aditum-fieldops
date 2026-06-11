@@ -4,15 +4,16 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../lib/firebase';
-import { Logo, Icon, Button, LangSwitcher } from '../../components/ui';
+import { BrandLogo, Icon, Button, LangSwitcher } from '../../components/ui';
+import { brandVars } from '../../lib/branding';
 import { PublicError } from './PublicView';
 
-export function PublicShell({ children }: { children: React.ReactNode }) {
+export function PublicShell({ children, branding }: { children: React.ReactNode; branding?: any }) {
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)', ...brandVars(branding?.primaryColor, branding?.accentColor) } as React.CSSProperties}>
       <div style={{ background: 'var(--navy-900)', padding: '18px 24px' }}>
         <div style={{ maxWidth: 620, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Logo variant="dark" height={30} withLockup lockupColor="#fff" dark />
+          <BrandLogo logoUrl={branding?.logoUrl} variant="dark" height={30} withLockup lockupColor="#fff" dark />
           <LangSwitcher dark />
         </div>
       </div>
@@ -51,6 +52,7 @@ export default function PublicConfirm() {
   const { token } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState<any>(null);
+  const [branding, setBranding] = useState<any>(null);
   const [err, setErr] = useState<'desactivado' | 'expirado' | '404' | null>(null);
   const [used, setUsed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -63,7 +65,7 @@ export default function PublicConfirm() {
       try {
         const fn = httpsCallable(functions, 'getPublicServiceOrder');
         const res: any = await fn({ token, purpose: 'so_confirm' });
-        if (!cancelled) setOrder(res.data.order);
+        if (!cancelled) { setOrder(res.data.order); setBranding(res.data.branding || null); }
       } catch (e: any) {
         if (cancelled) return;
         const code = e?.details?.reason || '404';
@@ -101,7 +103,7 @@ export default function PublicConfirm() {
 
   if (used)
     return (
-      <PublicShell>
+      <PublicShell branding={branding}>
         <div className="card card-pad fade-in" style={{ textAlign: 'center', padding: '40px 28px' }}>
           <div style={{ width: 64, height: 64, borderRadius: 16, background: 'var(--st-apro-bg)', color: 'var(--st-apro-fg)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
             <Icon name="checkCircle" size={30} />
@@ -116,7 +118,7 @@ export default function PublicConfirm() {
 
   if (done)
     return (
-      <PublicShell>
+      <PublicShell branding={branding}>
         <div className="card card-pad fade-in" style={{ textAlign: 'center', padding: '44px 28px' }}>
           <div style={{ width: 70, height: 70, borderRadius: 18, background: 'var(--st-apro-bg)', color: 'var(--st-apro-fg)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px' }}>
             <Icon name="checkCircle" size={34} />
@@ -130,7 +132,7 @@ export default function PublicConfirm() {
     );
 
   return (
-    <PublicShell>
+    <PublicShell branding={branding}>
       <div className="card card-pad fade-in" style={{ padding: '28px 26px' }}>
         <h1 style={{ margin: '0 0 6px', fontSize: 21, fontWeight: 700 }}>{t('publicConfirm.title')}</h1>
         <p style={{ margin: '0 0 18px', fontSize: 14, color: 'var(--text-2)', lineHeight: 1.55 }}>

@@ -9,7 +9,7 @@ import * as logger from 'firebase-functions/logger';
 import * as admin from 'firebase-admin';
 import { nowCR, addMonthsCR, computeNoticeDate, canTransition, PERIODICITIES, PeriodicityMonths } from './shared';
 import { tcol, createPublicToken } from './tenant';
-import { SMTP_USER, SMTP_PASS, sendMailSafe } from './notifications';
+import { SMTP_USER, SMTP_PASS, sendMailSafe, getBranding } from './notifications';
 import { soTechTpl, reportTpl } from './publicFlow';
 import { getSettings } from './scheduler';
 
@@ -152,12 +152,13 @@ export const onServiceOrderWritten = onDocumentWritten(
     const soId = event.params.id;
     const ref = event.data!.after!.ref;
     const so = { id: soId, ...after };
+    const brand = await getBranding(tid);
 
     // Asignación de técnico (creación o cambio)
     if (after.techId && after.techId !== before?.techId) {
       const email = await techEmailOf(tid, after.techId);
       if (email) {
-        const m = soTechTpl(so, 'Nueva orden de mantenimiento asignada', `Tenés una visita ${after.type === 'correctivo' ? 'correctiva' : 'preventiva'} programada para el ${after.scheduledDate}.`);
+        const m = soTechTpl(so, 'Nueva orden de mantenimiento asignada', `Tenés una visita ${after.type === 'correctivo' ? 'correctiva' : 'preventiva'} programada para el ${after.scheduledDate}.`, brand);
         await sendMailSafe(tid, email, m.subject, m.html);
       }
     }
@@ -167,7 +168,7 @@ export const onServiceOrderWritten = onDocumentWritten(
     if (statusChanged && after.status === 'CONFIRMADA') {
       const email = await techEmailOf(tid, after.techId);
       if (email) {
-        const m = soTechTpl(so, 'El cliente confirmó la visita', `La visita del ${after.scheduledDate} a las ${after.scheduledTime || '08:00'} fue confirmada por el cliente.`);
+        const m = soTechTpl(so, 'El cliente confirmó la visita', `La visita del ${after.scheduledDate} a las ${after.scheduledTime || '08:00'} fue confirmada por el cliente.`, brand);
         await sendMailSafe(tid, email, m.subject, m.html);
       }
     }
@@ -175,11 +176,11 @@ export const onServiceOrderWritten = onDocumentWritten(
     if (statusChanged && after.status === 'REAGENDADA') {
       const email = await techEmailOf(tid, after.techId);
       if (email) {
-        const m = soTechTpl(so, 'El cliente reagendó la visita', `Nueva fecha: ${after.scheduledDate} a las ${after.scheduledTime || '08:00'}.`);
+        const m = soTechTpl(so, 'El cliente reagendó la visita', `Nueva fecha: ${after.scheduledDate} a las ${after.scheduledTime || '08:00'}.`, brand);
         await sendMailSafe(tid, email, m.subject, m.html);
       }
       if (after.client?.email) {
-        const m = soTechTpl(so, 'Tu visita fue reagendada', `Confirmamos la nueva fecha: ${after.scheduledDate} a las ${after.scheduledTime || '08:00'}.`);
+        const m = soTechTpl(so, 'Tu visita fue reagendada', `Confirmamos la nueva fecha: ${after.scheduledDate} a las ${after.scheduledTime || '08:00'}.`, brand);
         await sendMailSafe(tid, after.client.email, m.subject, m.html);
       }
       // recalcular fecha de aviso para el recordatorio
@@ -193,7 +194,7 @@ export const onServiceOrderWritten = onDocumentWritten(
 
     if (statusChanged && after.status === 'CANCELADA') {
       if (after.client?.email && before?.status && before.status !== 'PROGRAMADA') {
-        const m = soTechTpl(so, 'Visita de mantenimiento cancelada', `La visita programada para el ${after.scheduledDate} fue cancelada.`);
+        const m = soTechTpl(so, 'Visita de mantenimiento cancelada', `La visita programada para el ${after.scheduledDate} fue cancelada.`, brand);
         await sendMailSafe(tid, after.client.email, m.subject, m.html);
       }
     }
@@ -210,7 +211,7 @@ export const onServiceOrderWritten = onDocumentWritten(
           const url = `${PUBLIC_BASE}/r/${token}`;
           await ref.set({ reportShare: { active: true, token, url, created: nowCR(), lastVisit: null } }, { merge: true });
           if (after.client?.email) {
-            const m = reportTpl(so, url);
+            const m = reportTpl(so, url, brand);
             await sendMailSafe(tid, after.client.email, m.subject, m.html);
           }
         } catch (e) {

@@ -54,13 +54,18 @@
     "forgot": "¿Olvidaste tu contraseña?",
     "forgotSent": "Se envió un enlace de recuperación.",
     "verifying": "Verificando…",
+    "serviceCenter": "Centro de Servicio",
     "heroBadge": "Gestión de trabajo técnico en sitio",
-    "heroTitle": "Controla cada instalación, de principio a fin.",
-    "heroText": "Crea órdenes de trabajo, asigna técnicos, recibe evidencia desde el campo y comparte el resultado con tus clientes.",
+    "heroTitle": "Coordina cada servicio en sitio, de principio a fin.",
+    "heroText": "Crea órdenes de trabajo, programa mantenimientos, asigna técnicos, recibe evidencia desde el campo y comparte el reporte con tus clientes.",
     "heroMeta": "Control de acceso",
     "errEmpty": "Ingresa tu correo y contraseña.",
     "errInvalid": "Credenciales inválidas. Verifica tu correo y contraseña.",
-    "errInactive": "Usuario inactivo. Contacta al administrador."
+    "errInactive": "Usuario inactivo. Contacta al administrador.",
+    "forgotTitle": "Recuperar contraseña",
+    "forgotSub": "Ingresá tu correo y te enviaremos un enlace para crear una nueva contraseña.",
+    "forgotSend": "Enviar enlace",
+    "forgotEmailPh": "tu.correo@empresa.com"
   },
   "dashboard": {
     "createTicket": "Crear orden de trabajo",
@@ -125,7 +130,7 @@
     "title": "Personal",
     "sub": "{{active}} activos · {{total}} en total",
     "create": "Agregar personal",
-    "edit": "Editar técnico",
+    "edit": "Editar personal",
     "createSub": "Agrega un colaborador (técnico, coordinador o facturación) y comparte sus credenciales.",
     "editSub": "Actualiza los datos del colaborador.",
     "fullName": "Nombre completo",
@@ -160,7 +165,10 @@
     "fRole": "Rol",
     "fRoleHint": "Técnico (móvil), Coordinador o Facturación (escritorio)",
     "colRole": "Rol",
-    "deskStaff": "Personal de escritorio"
+    "deskStaff": "Personal de escritorio",
+    "kindTech": "Técnico (móvil)",
+    "kindDesk": "Personal de escritorio",
+    "fRolesHint": "Puede tener uno o ambos roles de escritorio."
   },
   "credentials": {
     "title": "Técnico creado correctamente",
@@ -483,7 +491,10 @@
     "lastUpdated": "Última actualización",
     "backToWiki": "Volver a la Wiki",
     "requiredTitle": "El título es obligatorio",
-    "uploadingAttachment": "Subiendo adjunto…"
+    "uploadingAttachment": "Subiendo adjunto…",
+    "notFound": "Página no encontrada",
+    "notFoundSub": "La página de wiki no existe o fue eliminada.",
+    "backToList": "Volver a la wiki"
   },
   "inventory": {
     "nav": "Inventario",
@@ -625,7 +636,12 @@
     "activateTitle": "¿Activar tenant?",
     "activateMsg": "Los usuarios recuperan acceso de inmediato.",
     "deactivate": "Desactivar",
-    "activate": "Activar"
+    "activate": "Activar",
+    "fWhiteLabel": "White-label",
+    "fWhiteLabelHint": "Permite que la empresa personalice su logo y colores.",
+    "wlOn": "Habilitado",
+    "wlOff": "Deshabilitado",
+    "editAdmin": "Editar administrador"
   },
   "tenantSettings": {
     "nav": "Configuración",
@@ -1112,5 +1128,34 @@
   "settings": {
     "title": "Configuración",
     "language": "Idioma"
+  },
+  "branding": {
+    "title": "Marca de la empresa",
+    "intro": "Personalizá el logo y los colores. Aplican en toda la app, los correos y las páginas que ve tu cliente.",
+    "primary": "Color primario",
+    "accent": "Color de acento",
+    "logo": "Logo",
+    "logoHint": "PNG/SVG horizontal. Se muestra a altura fija; usá una imagen con buen contraste sobre tu color primario.",
+    "logoUpload": "Subir logo",
+    "logoUploaded": "Logo subido",
+    "logoType": "Formato no válido. Usá PNG, JPG, WEBP o SVG.",
+    "logoSize": "La imagen supera 2MB.",
+    "hexInvalid": "Color inválido (#RRGGBB).",
+    "previewTag": "Vista previa"
+  },
+  "reset": {
+    "title": "Nueva contraseña",
+    "sub": "Definí una nueva contraseña para {{email}}.",
+    "newPassword": "Nueva contraseña",
+    "confirmPassword": "Confirmar contraseña",
+    "mismatch": "Las contraseñas no coinciden.",
+    "weak": "La contraseña debe tener al menos 6 caracteres.",
+    "save": "Guardar contraseña",
+    "successTitle": "¡Contraseña actualizada!",
+    "successMsg": "Ya podés iniciar sesión con tu nueva contraseña.",
+    "backToLogin": "Ir al login",
+    "invalidTitle": "Enlace inválido o vencido",
+    "invalidMsg": "Este enlace de recuperación ya no es válido. Solicitá uno nuevo desde el login.",
+    "verifying": "Verificando el enlace…"
   }
 }

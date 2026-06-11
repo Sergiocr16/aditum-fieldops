@@ -59,6 +59,12 @@ export const ICONS: Record<string, string> = {
   zap: 'M13 2 3 14h9l-1 8 10-12h-9l1-8Z',
   globe: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20Z',
   settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z',
+  clipboard: 'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2 M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z M9.5 14.5l2 2 3.5-3.5',
+  cpu: 'M4 4h16v16H4z M9 9h6v6H9z M9 1v3 M15 1v3 M9 20v3 M15 20v3 M20 9h3 M20 14h3 M1 9h3 M1 14h3',
+  box: 'M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z M3.3 7 12 12l8.7-5 M12 22V12',
+  receipt: 'M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z M8 8h8 M8 12h8 M8 16h6',
+  book: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20 M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z',
+  sliders: 'M20 7h-9 M14 17H5 M17 14a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z M7 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z',
 };
 
 export function Icon({ name, size = 18, stroke = 1.7, fill = 'none', className = '', style }: any) {
@@ -108,6 +114,17 @@ export function Logo({ variant = 'horizontal', height = 30, withLockup = true, l
       )}
     </span>
   );
+}
+
+/* ---------------- Brand logo (white-label) ----------------
+   Si el tenant subió su logo, se muestra a una ALTURA FIJA con object-fit:contain
+   (cualquier imagen entra en el slot sin descalzar el layout). Si no, cae al logo Aditum.
+   El logo del tenant se muestra tal cual (sin invertir): debe verse bien sobre su color primario. */
+export function BrandLogo({ logoUrl, height = 30, variant = 'horizontal', withLockup = true, lockupColor = 'var(--text)', dark = false }: any) {
+  if (logoUrl) {
+    return <img src={logoUrl} alt="" style={{ height, width: 'auto', maxWidth: height * 6, objectFit: 'contain', display: 'block' }} />;
+  }
+  return <Logo variant={variant} height={height} withLockup={withLockup} lockupColor={lockupColor} dark={dark} />;
 }
 
 /* ---------------- Status badge / Priority chip ---------------- */
@@ -216,7 +233,7 @@ export function Modal({ open, onClose, title, sub, children, footer, width = 520
           borderRadius: 16,
           boxShadow: 'var(--sh-pop)',
           width: '100%',
-          maxWidth: width,
+          maxWidth: typeof width === 'number' ? Math.min(Math.round(width * 1.9), 1140) : width,
           maxHeight: '90vh',
           display: 'flex',
           flexDirection: 'column',

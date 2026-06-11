@@ -54,13 +54,18 @@
     "forgot": "Forgot your password?",
     "forgotSent": "A recovery link has been sent.",
     "verifying": "Verifying…",
+    "serviceCenter": "Service Center",
     "heroBadge": "On-site technical work management",
-    "heroTitle": "Control every installation, from start to finish.",
-    "heroText": "Create work orders, assign technicians, receive evidence from the field, and share the result with your clients.",
+    "heroTitle": "Run every on-site service, end to end.",
+    "heroText": "Create work orders, schedule maintenance, assign technicians, capture evidence from the field, and share the report with your clients.",
     "heroMeta": "Access control",
     "errEmpty": "Enter your email and password.",
     "errInvalid": "Invalid credentials. Check your email and password.",
-    "errInactive": "Inactive user. Contact the administrator."
+    "errInactive": "Inactive user. Contact the administrator.",
+    "forgotTitle": "Reset password",
+    "forgotSub": "Enter your email and we will send you a link to create a new password.",
+    "forgotSend": "Send link",
+    "forgotEmailPh": "your.email@company.com"
   },
   "dashboard": {
     "createTicket": "Create work order",
@@ -125,7 +130,7 @@
     "title": "Staff",
     "sub": "{{active}} active · {{total}} total",
     "create": "Add staff",
-    "edit": "Edit technician",
+    "edit": "Edit staff",
     "createSub": "Add a collaborator (technician, coordinator or billing) and share their credentials.",
     "editSub": "Update the collaborator's details.",
     "fullName": "Full name",
@@ -160,7 +165,10 @@
     "fRole": "Role",
     "fRoleHint": "Technician (mobile), Coordinator or Billing (desktop)",
     "colRole": "Role",
-    "deskStaff": "Desktop staff"
+    "deskStaff": "Desktop staff",
+    "kindTech": "Technician (mobile)",
+    "kindDesk": "Desk staff",
+    "fRolesHint": "Can hold one or both desk roles."
   },
   "credentials": {
     "title": "Technician created successfully",
@@ -483,7 +491,10 @@
     "lastUpdated": "Last updated",
     "backToWiki": "Back to Wiki",
     "requiredTitle": "Title is required",
-    "uploadingAttachment": "Uploading attachment…"
+    "uploadingAttachment": "Uploading attachment…",
+    "notFound": "Page not found",
+    "notFoundSub": "The wiki page does not exist or was deleted.",
+    "backToList": "Back to wiki"
   },
   "inventory": {
     "nav": "Inventory",
@@ -625,7 +636,12 @@
     "activateTitle": "Activate tenant?",
     "activateMsg": "Users regain access immediately.",
     "deactivate": "Deactivate",
-    "activate": "Activate"
+    "activate": "Activate",
+    "fWhiteLabel": "White-label",
+    "fWhiteLabelHint": "Lets the company customize its logo and colors.",
+    "wlOn": "Enabled",
+    "wlOff": "Disabled",
+    "editAdmin": "Edit administrator"
   },
   "tenantSettings": {
     "nav": "Settings",
@@ -1112,5 +1128,34 @@
   "settings": {
     "title": "Settings",
     "language": "Language"
+  },
+  "branding": {
+    "title": "Company brand",
+    "intro": "Customize your logo and colors. They apply across the app, emails and the pages your client sees.",
+    "primary": "Primary color",
+    "accent": "Accent color",
+    "logo": "Logo",
+    "logoHint": "Horizontal PNG/SVG. Shown at a fixed height; use an image with good contrast over your primary color.",
+    "logoUpload": "Upload logo",
+    "logoUploaded": "Logo uploaded",
+    "logoType": "Invalid format. Use PNG, JPG, WEBP or SVG.",
+    "logoSize": "Image exceeds 2MB.",
+    "hexInvalid": "Invalid color (#RRGGBB).",
+    "previewTag": "Preview"
+  },
+  "reset": {
+    "title": "New password",
+    "sub": "Set a new password for {{email}}.",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm password",
+    "mismatch": "Passwords do not match.",
+    "weak": "Password must be at least 6 characters.",
+    "save": "Save password",
+    "successTitle": "Password updated!",
+    "successMsg": "You can now sign in with your new password.",
+    "backToLogin": "Go to login",
+    "invalidTitle": "Invalid or expired link",
+    "invalidMsg": "This recovery link is no longer valid. Request a new one from the login.",
+    "verifying": "Verifying the link…"
   }
 }

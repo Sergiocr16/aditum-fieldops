@@ -29,7 +29,7 @@ export interface DataState {
     email: string;
     phone?: string;
     password: string;
-    role?: string;
+    roles?: string[];
   }) => Promise<{ uid: string; password: string }>;
   updateTechnician: (id: string, patch: Partial<AppUser>) => Promise<void>;
   resetTechnicianPassword: (id: string) => Promise<{ password: string }>;

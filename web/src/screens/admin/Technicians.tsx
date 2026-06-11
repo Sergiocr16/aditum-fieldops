@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { Icon, Avatar, Button, Modal, Field, Input, Select, Toggle, toast, CredentialsCard, confirmDialog } from '../../components/ui';
+import { Icon, Avatar, Button, Modal, Field, Input, Toggle, toast, CredentialsCard, confirmDialog } from '../../components/ui';
 import { PageHeader } from './AdminShell';
 import { useTenant } from '../../lib/tenant';
 import { tenantHasFeature } from '../../lib/modules';
@@ -11,7 +11,6 @@ import AvailabilityEditor from '../../components/AvailabilityEditor';
 import type { AppCtx } from '../../lib/ctx';
 import type { AppUser } from '../../lib/types';
 
-const CREATABLE_ROLES = ['tech', 'coordinador', 'facturacion'] as const;
 
 export function genPassword() {
   const a = 'ABCDEFGHJKMNPQRSTUVWXYZ',
@@ -29,7 +28,7 @@ function TechFormModal({ open, tech, onClose, onSave }: any) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState<string>('tech');
+  const [roles, setRoles] = useState<string[]>(['tech']);
   const [pass, setPass] = useState('');
   const [err, setErr] = useState<any>({});
   const [saving, setSaving] = useState(false);
@@ -38,12 +37,21 @@ function TechFormModal({ open, tech, onClose, onSave }: any) {
       setName(tech?.name || '');
       setEmail(tech?.email || '');
       setPhone(tech?.phone || '');
-      setRole(tech?.role || 'tech');
+      setRoles(tech?.roles?.length ? tech.roles : tech?.role ? [tech.role] : ['tech']);
       setPass(editing ? '' : genPassword());
       setErr({});
       setSaving(false);
     }
   }, [open, tech]);
+
+  const isTech = roles.includes('tech');
+  const curIsDesk = !!tech && (tech.role === 'coordinador' || tech.role === 'facturacion' || (tech.roles || []).some((r: string) => r === 'coordinador' || r === 'facturacion'));
+  const showRoleEditor = !editing || curIsDesk;
+  const toggleDesk = (r: string) => setRoles((prev) => {
+    const base = prev.filter((x) => x !== 'tech');
+    const next = base.includes(r) ? base.filter((x) => x !== r) : [...base, r];
+    return next.length ? next : prev; // al menos un rol de escritorio
+  });
 
   const save = async () => {
     const e: any = {};
@@ -55,7 +63,7 @@ function TechFormModal({ open, tech, onClose, onSave }: any) {
     if (Object.keys(e).length) return;
     setSaving(true);
     try {
-      await onSave({ id: tech?.id, name: name.trim(), email: email.trim(), phone: phone.trim(), password: pass, role });
+      await onSave({ id: tech?.id, name: name.trim(), email: email.trim(), phone: phone.trim(), password: pass, roles });
     } finally {
       setSaving(false);
     }
@@ -87,11 +95,31 @@ function TechFormModal({ open, tech, onClose, onSave }: any) {
         <Field label={t('technicians.phone')} hint={t('common.optional')}>
           <Input icon="phone" placeholder="8888-8888" value={phone} onChange={(e: any) => setPhone(e.target.value)} />
         </Field>
-        {!editing && (
-          <Field label={t('technicians.fRole')} hint={t('technicians.fRoleHint')}>
-            <Select value={role} onChange={(e: any) => setRole(e.target.value)}>
-              {CREATABLE_ROLES.map((r) => <option key={r} value={r}>{t('roles.' + r)}</option>)}
-            </Select>
+        {showRoleEditor && (
+          <Field label={t('technicians.fRole')} hint={isTech ? t('technicians.fRoleHint') : t('technicians.fRolesHint')}>
+            {!editing && (
+              <div style={{ display: 'flex', gap: 6, background: 'var(--bg)', borderRadius: 11, padding: 4, marginBottom: roles.includes('tech') ? 0 : 10 }}>
+                {[{ k: 'tech', label: t('technicians.kindTech') }, { k: 'desk', label: t('technicians.kindDesk') }].map((opt) => {
+                  const on = opt.k === 'tech' ? isTech : !isTech;
+                  return (
+                    <button key={opt.k} type="button" onClick={() => setRoles(opt.k === 'tech' ? ['tech'] : ['coordinador'])}
+                      style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: on ? '#fff' : 'transparent', color: on ? 'var(--navy-900)' : 'var(--text-2)', boxShadow: on ? 'var(--sh-sm)' : 'none' }}>
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {!isTech && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {['coordinador', 'facturacion'].map((r) => (
+                  <label key={r} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', background: roles.includes(r) ? 'var(--gold-50)' : '#fff' }}>
+                    <input type="checkbox" checked={roles.includes(r)} onChange={() => toggleDesk(r)} />
+                    <span style={{ fontSize: 13.5, fontWeight: 600 }}>{t('roles.' + r)}</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </Field>
         )}
         {/* La contraseña se genera automáticamente y se muestra en la tarjeta de credenciales al crear. */}
@@ -127,7 +155,7 @@ export default function TechniciansScreen({ ctx, openCreate }: { ctx: AppCtx; op
   const onSave = async (data: any) => {
     if (data.id) {
       try {
-        await ctx.updateTechnician(data.id, { name: data.name, phone: data.phone, email: data.email } as any);
+        await ctx.updateTechnician(data.id, { name: data.name, phone: data.phone, email: data.email, roles: data.roles } as any);
         toast(t('technicians.updated'), 'success');
         setModal(null);
       } catch (e: any) {
@@ -135,7 +163,7 @@ export default function TechniciansScreen({ ctx, openCreate }: { ctx: AppCtx; op
       }
     } else {
       try {
-        await ctx.addTechnician({ name: data.name, email: data.email, phone: data.phone, password: data.password, role: data.role });
+        await ctx.addTechnician({ name: data.name, email: data.email, phone: data.phone, password: data.password, roles: data.roles });
         setModal(null);
         setCreds({ name: data.name, email: data.email, password: data.password, title: t('technicians.created'), sub: t('technicians.createdSub') });
       } catch (e: any) {
@@ -249,7 +277,11 @@ export default function TechniciansScreen({ ctx, openCreate }: { ctx: AppCtx; op
                         <span style={{ fontWeight: 600 }}>{u.name}</span>
                       </span>
                     </td>
-                    <td><span className="badge sm">{t('roles.' + u.role)}</span></td>
+                    <td>
+                      <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
+                        {(u.roles && u.roles.length ? u.roles : [u.role]).map((r) => <span key={r} className="badge sm">{t('roles.' + r)}</span>)}
+                      </span>
+                    </td>
                     <td style={{ color: 'var(--text-2)' }} className="mono-sm">{u.email}</td>
                     <td>
                       <span className={'badge sm ' + (u.active ? 'bg-apro' : 'bg-cerr')}>
@@ -259,6 +291,9 @@ export default function TechniciansScreen({ ctx, openCreate }: { ctx: AppCtx; op
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+                        <button className="icon-btn" title={t('common.edit')} onClick={() => setModal({ tech: u })}>
+                          <Icon name="edit" size={16} />
+                        </button>
                         <button className="icon-btn" title={t('technicians.resetPassword')} onClick={() => onResetPassword(u)}>
                           <Icon name="lock" size={16} />
                         </button>

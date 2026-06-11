@@ -30,6 +30,8 @@ export interface Tenant {
   techEditAvailability?: boolean;
   /** Idioma de la empresa (lo fija el admin); aplica a todos los usuarios del tenant. Default 'es'. */
   language?: 'es' | 'en';
+  /** Si el tenant puede personalizar su marca (logo + paleta). Lo define el superadmin. */
+  whiteLabel?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -257,6 +259,8 @@ export interface AppUser {
   name: string;
   email: string;
   role: Role;
+  /** Roles del usuario (multi-rol para personal de escritorio: coordinador y/o facturación). */
+  roles?: Role[];
   tenantId?: string | null;
   phone?: string;
   active: boolean;

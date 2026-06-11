@@ -49,6 +49,8 @@ export interface TenantDoc {
   notifyEmail: string;
   smtpStatus: 'unset' | 'verified' | 'error';
   language?: 'es' | 'en';
+  /** Si el tenant puede personalizar su marca (logo + paleta). Lo define el superadmin. */
+  whiteLabel?: boolean;
   createdAt: string;
   updatedAt: string;
   createdBy?: string;

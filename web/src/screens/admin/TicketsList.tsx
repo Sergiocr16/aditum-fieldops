@@ -191,7 +191,7 @@ export default function TicketsList({ ctx, onApprove, onReject, onReassign }: { 
                 <tr>
                   <td colSpan={9}>
                     <EmptyState
-                      icon={hasFilters ? 'search' : 'ticket'}
+                      icon={hasFilters ? 'search' : 'clipboard'}
                       title={hasFilters ? t('tickets.noResultsTitle') : t('tickets.emptyTitle')}
                       sub={hasFilters ? t('tickets.noResultsSub') : t('tickets.emptySub')}
                       action={hasFilters ? <Button variant="ghost" icon="x" onClick={clearAll}>{t('tickets.clearFilters')}</Button> : <Button variant="primary" icon="plus" onClick={() => ctx.go('ticketForm', { mode: 'new' })}>{t('tickets.create')}</Button>}

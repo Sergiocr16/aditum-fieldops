@@ -3,14 +3,14 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../lib/firebase';
-import { Icon, Button, Field, Input, Select, Textarea, toast } from '../../components/ui';
+import { Icon, Button, Field, Input, Select, Textarea, EmptyState, toast } from '../../components/ui';
 import { PageHeader } from './AdminShell';
 import Markdown from '../../components/Markdown';
 import { useWiki } from '../../lib/wiki';
 import { useTenant } from '../../lib/tenant';
 import { now } from '../../lib/time';
 import type { AppCtx } from '../../lib/ctx';
-import type { WikiAttachment, EvidenceType } from '../../lib/types';
+import type { WikiAttachment, EvidenceType, WikiPage } from '../../lib/types';
 
 function refFor(att: WikiAttachment): string {
   if (att.type === 'image') return `![${att.name}](${att.file})`;
@@ -18,13 +18,37 @@ function refFor(att: WikiAttachment): string {
   return `[${att.name}](${att.file})`;
 }
 
+/** Gate: en edición espera a que cargue la página antes de montar el form, para que el
+    estado se inicialice con los datos correctos (los datos del wiki llegan async). */
 export default function WikiEditor({ ctx, mode, id }: { ctx: AppCtx; mode: string; id?: string }) {
   const { t } = useTranslation();
   const wiki = useWiki();
-  const { tid } = useTenant();
   const editing = mode === 'edit';
   const existing = editing ? wiki.pages.find((p) => p.id === id) : null;
-  const [pageId] = useState(() => id || wiki.newPageId());
+
+  if (editing && !existing) {
+    return (
+      <div className="fade-in">
+        <PageHeader title={t('wiki.edit')} sub={t('wiki.newPage')} back={() => ctx.back()} />
+        {wiki.loading ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 0', color: 'var(--text-2)' }}>
+            <span className="spin" style={{ marginRight: 10 }}><Icon name="refresh" size={20} /></span>
+            {t('common.loading')}
+          </div>
+        ) : (
+          <EmptyState icon="book" title={t('wiki.notFound')} sub={t('wiki.notFoundSub')} action={<Button variant="ghost" icon="arrowLeft" onClick={() => ctx.go('wiki')}>{t('wiki.backToList')}</Button>} />
+        )}
+      </div>
+    );
+  }
+
+  return <WikiEditorForm key={existing?.id || 'new'} ctx={ctx} editing={editing} existing={existing || null} wiki={wiki} />;
+}
+
+function WikiEditorForm({ ctx, editing, existing, wiki }: { ctx: AppCtx; editing: boolean; existing: WikiPage | null; wiki: ReturnType<typeof useWiki> }) {
+  const { t } = useTranslation();
+  const { tid } = useTenant();
+  const [pageId] = useState(() => existing?.id || wiki.newPageId());
   const [title, setTitle] = useState(existing?.title || '');
   const [categoryId, setCategoryId] = useState(existing?.categoryId || '');
   const [content, setContent] = useState(existing?.contentMarkdown || '');
@@ -47,11 +71,16 @@ export default function WikiEditor({ ctx, mode, id }: { ctx: AppCtx; mode: strin
       undefined,
       (err) => { setUploading(false); toast(err.message, 'error'); },
       async () => {
-        const url = await getDownloadURL(task.snapshot.ref);
-        const att: WikiAttachment = { id: fileId, path, file: url, type: evType, name: file.name, size: file.size, by: ctx.admin.name, date: now() };
-        setAttachments((a) => [...a, att]);
-        setUploading(false);
-        toast(t('wiki.saved'), 'success');
+        try {
+          const url = await getDownloadURL(task.snapshot.ref);
+          const att: WikiAttachment = { id: fileId, path, file: url, type: evType, name: file.name, size: file.size, by: ctx.admin.name, date: now() };
+          setAttachments((a) => [...a, att]);
+          toast(t('wiki.saved'), 'success');
+        } catch (err: any) {
+          toast(err?.message || 'Error', 'error');
+        } finally {
+          setUploading(false);
+        }
       }
     );
   };

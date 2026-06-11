@@ -14,6 +14,9 @@
   --gold-600:#c79d52;
   --gold-100:#f6ecd7;
   --gold-50:#fbf6ea;
+  /* Texto legible sobre fondos de marca (lo recalcula el motor white-label según el color) */
+  --gold-fg:var(--navy-900);
+  --on-primary:#ffffff;
 
   /* Neutrals */
   --bg:#F7F8FA;
@@ -115,9 +118,9 @@ input,textarea,select{font-family:inherit;}
 }
 .btn:active{transform:translateY(1px);}
 .btn svg{flex:none;}
-.btn-primary{background:var(--navy-800);color:#fff;}
+.btn-primary{background:var(--navy-800);color:var(--on-primary);}
 .btn-primary:hover{background:var(--navy-700);}
-.btn-gold{background:var(--gold);color:var(--navy-900);}
+.btn-gold{background:var(--gold);color:var(--gold-fg);}
 .btn-gold:hover{background:var(--gold-600);}
 .btn-ghost{background:var(--surface);color:var(--text);border-color:var(--border);}
 .btn-ghost:hover{background:#f3f5f8;border-color:var(--border-strong);}
@@ -150,7 +153,7 @@ input,textarea,select{font-family:inherit;}
 .textarea{resize:vertical;min-height:88px;line-height:1.5;}
 .input-ico{position:relative;}
 .input-ico .input{padding-left:38px;}
-.input-ico svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);}
+.input-ico > svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);}
 
 /* iOS Safari hace auto-zoom al enfocar un campo con font-size < 16px. En dispositivos
    táctiles forzamos ≥16px en todos los controles (incluye overrides inline) para evitarlo,
@@ -158,6 +161,22 @@ input,textarea,select{font-family:inherit;}
 @media (pointer: coarse){
   .input,.textarea,.select,input,textarea,select{font-size:16px !important;}
 }
+
+/* ---------- Login (auth) — controles más generosos y CTA moderno, solo en esta pantalla ---------- */
+/* Login split: desktop = carrusel a la izquierda + panel plano a la derecha (sin card);
+   móvil = una sola card flotante sobre el carrusel a pantalla completa. */
+.login-right{background:linear-gradient(165deg,#f1f4f8 0%,#e6ebf1 100%);padding:40px clamp(24px,4vw,56px);}
+.login-formwrap{width:100%;max-width:392px;}
+.login-lang-mobile{display:none;}
+.login-carousel-mobile{display:none;}
+.login-form .input{height:50px;border-radius:13px;font-size:15px;background:var(--surface);border:1.5px solid var(--border);transition:border-color .15s var(--ease),box-shadow .15s var(--ease);}
+.login-form .input:focus{border-color:var(--navy-500);box-shadow:0 0 0 4px rgba(19,73,107,.10);}
+.login-form .input-ico .input{padding-left:42px;}
+.login-form .input-ico > svg{left:15px;}
+.login-cta{height:52px;width:100%;border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,var(--navy-700),var(--navy-900));box-shadow:0 14px 30px -12px rgba(0,30,47,.5);transition:background .18s var(--ease),box-shadow .18s var(--ease),transform .12s var(--ease);}
+.login-cta:hover{background:linear-gradient(135deg,var(--navy-600),var(--navy-800));box-shadow:0 18px 36px -12px rgba(0,30,47,.58);}
+.login-cta:active{transform:translateY(1px);}
+.login-cta:disabled{opacity:.65;cursor:default;box-shadow:none;}
 
 /* Toggle */
 .toggle{position:relative;width:42px;height:24px;border-radius:999px;background:#cfd5dd;border:none;transition:background .18s var(--ease);flex:none;padding:0;}

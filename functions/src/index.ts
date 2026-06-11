@@ -6,7 +6,7 @@ import { onObjectFinalized } from 'firebase-functions/v2/storage';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import * as logger from 'firebase-functions/logger';
 import * as admin from 'firebase-admin';
-import { SMTP_USER, SMTP_PASS, ADMIN_EMAIL, sendMail, sendMailSafe, assignedTpl, readyTpl, rejectedTpl, approvedTpl, sharedReportTpl, lastRejectionComment } from './notifications';
+import { SMTP_USER, SMTP_PASS, ADMIN_EMAIL, sendMail, sendMailSafe, getBranding, publicBranding, assignedTpl, readyTpl, rejectedTpl, approvedTpl, sharedReportTpl, passwordResetTpl, lastRejectionComment } from './notifications';
 import { randomUUID } from 'crypto';
 import { initialsOf, nowCR } from './shared';
 import { tcol, tenantRef, assertAdmin, assertSameTenantUser, resolvePublicToken, createPublicToken, invalidatePublicToken } from './tenant';
@@ -38,11 +38,22 @@ function genPassword() {
 // (Crear otros admins es exclusivo del superadmin → createTenantAdmin.)
 const ADMIN_CREATABLE = ['tech', 'coordinador', 'facturacion'];
 
+/** Normaliza la selección de roles. 'tech' es exclusivo (técnico móvil); el personal
+    de escritorio puede combinar coordinador y/o facturación. */
+function normalizeMemberRoles(roles: any, single?: any): string[] {
+  let r = Array.isArray(roles) ? roles.filter((x: any) => ADMIN_CREATABLE.includes(x)) : [];
+  if (!r.length && ADMIN_CREATABLE.includes(single)) r = [single];
+  if (!r.length) r = ['tech'];
+  if (r.includes('tech')) return ['tech'];
+  return [...new Set(r)] as string[];
+}
+
 export const createTechnician = onCall(async (req) => {
   const ctx = assertAdmin(req);
-  const { name, email, phone, password, role } = req.data || {};
+  const { name, email, phone, password, role, roles } = req.data || {};
   if (!name?.trim() || !email?.trim()) throw new HttpsError('invalid-argument', 'name and email are required.');
-  const memberRole = ADMIN_CREATABLE.includes(role) ? role : 'tech';
+  const memberRoles = normalizeMemberRoles(roles, role);
+  const primary = memberRoles[0];
   const pass = (password && String(password)) || genPassword();
   let userRecord;
   try {
@@ -51,12 +62,13 @@ export const createTechnician = onCall(async (req) => {
     if (e.code === 'auth/email-already-exists') throw new HttpsError('already-exists', 'A user with that email already exists.');
     throw new HttpsError('internal', e.message || 'Could not create user.');
   }
-  await admin.auth().setCustomUserClaims(userRecord.uid, { role: memberRole, tenantId: ctx.tenantId });
+  await admin.auth().setCustomUserClaims(userRecord.uid, { role: primary, roles: memberRoles, tenantId: ctx.tenantId });
   const ts = nowCR();
   await db.collection('users').doc(userRecord.uid).set({
     name: name.trim(),
     email: email.trim(),
-    role: memberRole,
+    role: primary,
+    roles: memberRoles,
     tenantId: ctx.tenantId,
     phone: phone || '',
     active: true,
@@ -70,10 +82,23 @@ export const createTechnician = onCall(async (req) => {
 
 export const updateTechnician = onCall(async (req) => {
   const ctx = assertAdmin(req);
-  const { id, name, phone, active, email } = req.data || {};
+  const { id, name, phone, active, email, roles } = req.data || {};
   if (!id) throw new HttpsError('invalid-argument', 'id is required.');
-  await assertSameTenantUser(ctx, id);
+  const target = await assertSameTenantUser(ctx, id);
   const patch: any = { updatedAt: nowCR() };
+
+  // Edición de roles: solo para personal de escritorio (coordinador/facturación),
+  // que puede combinar ambos. No aplica a técnicos ni admins.
+  if (Array.isArray(roles)) {
+    const curRoles: string[] = Array.isArray(target.roles) ? target.roles : [target.role];
+    const isDesk = curRoles.some((r) => r === 'coordinador' || r === 'facturacion');
+    const next = [...new Set(roles.filter((r: any) => r === 'coordinador' || r === 'facturacion'))] as string[];
+    if (isDesk && next.length) {
+      patch.role = next[0];
+      patch.roles = next;
+      await admin.auth().setCustomUserClaims(id, { role: next[0], roles: next, tenantId: ctx.tenantId });
+    }
+  }
   if (typeof name === 'string') {
     patch.name = name.trim();
     patch.initials = initialsOf(name);
@@ -165,11 +190,41 @@ export const getPublicTicket = onCall(async (req) => {
     evidence: (t.evidence || []).map((e: any) => ({ file: e.file, type: e.type, desc: e.desc, date: e.date, name: e.name || null })),
     approval: t.approval || null,
   };
-  return { ticket };
+  return { ticket, branding: await publicBranding(tk.tenantId) };
 });
 
 /* ------------------------- public link management (admin) ------------------------- */
 const PUBLIC_BASE = process.env.PUBLIC_BASE_URL || 'https://fieldops-aditum.web.app';
+
+/* ------------------------- password reset (self-service, no auth) ------------------------- */
+/** Genera un enlace de reseteo y lo envía con la marca + SMTP del tenant a una
+    página propia (/reset). Anti-enumeración: siempre responde ok, exista o no el correo. */
+export const requestPasswordReset = onCall({ secrets: [SMTP_USER, SMTP_PASS] }, async (req) => {
+  const email = String(req.data?.email || '').trim().toLowerCase();
+  if (!email || !/.+@.+\..+/.test(email)) return { ok: true }; // no revelar nada
+  try {
+    const userRecord = await admin.auth().getUserByEmail(email);
+    const tenantId = (userRecord.customClaims as any)?.tenantId || null;
+    // Link de reseteo (Admin SDK) → extraemos el oobCode y armamos nuestra propia página.
+    const fbLink = await admin.auth().generatePasswordResetLink(email, { url: `${PUBLIC_BASE}/login` });
+    const oobCode = new URL(fbLink).searchParams.get('oobCode');
+    if (!oobCode) return { ok: true };
+    const resetUrl = `${PUBLIC_BASE}/reset?oobCode=${encodeURIComponent(oobCode)}`;
+    logger.info('password reset link', { email, resetUrl }); // visible en emulador (SMTP real no envía)
+    if (tenantId) {
+      const brand = await getBranding(tenantId);
+      const m = passwordResetTpl(resetUrl, brand);
+      await sendMailSafe(tenantId, email, m.subject, m.html);
+    } else {
+      // superadmin u otros sin tenant: correo con marca por defecto vía SMTP global
+      const m = passwordResetTpl(resetUrl);
+      await sendMailSafe('', email, m.subject, m.html);
+    }
+  } catch (e) {
+    logger.warn('requestPasswordReset: usuario no encontrado o fallo (silencioso)', { email });
+  }
+  return { ok: true };
+});
 
 async function ensureLink(tenantId: string, ticketId: string, by: string, action: 'generate' | 'regenerate' | 'toggle') {
   const ref = tcol(tenantId, 'tickets').doc(ticketId);
@@ -217,7 +272,8 @@ export const sharePublicLink = onCall({ secrets: [SMTP_USER, SMTP_PASS] }, async
   const { url } = await ensureLink(ctx.tenantId, ticketId, ctx.uid, 'generate');
   const snap = await tcol(ctx.tenantId, 'tickets').doc(ticketId).get();
   const t = snap.data() as any;
-  const m = sharedReportTpl({ num: t.num, title: t.title, client: t.client, site: t.site, priority: t.priority, scheduled: t.scheduled }, url, message);
+  const brand = await getBranding(ctx.tenantId);
+  const m = sharedReportTpl({ num: t.num, title: t.title, client: t.client, site: t.site, priority: t.priority, scheduled: t.scheduled }, url, message, brand);
   try {
     await sendMail(ctx.tenantId, String(to).trim(), m.subject, m.html, cc ? String(cc).trim() : undefined);
   } catch (e: any) {
@@ -318,25 +374,28 @@ export const onTicketWritten = onDocumentWritten(
     const tid = event.params.tid;
     const ticket = { id: event.params.id, ...after };
 
+    // Branding del tenant (logo + paleta) para todos los correos de esta orden.
+    const brand = await getBranding(tid);
+
     // Asignación / reasignación
     if (after.techId && after.techId !== before?.techId) {
       const email = await techEmail(tid, after.techId);
-      const m = assignedTpl(ticket);
+      const m = assignedTpl(ticket, brand);
       if (email) await sendMailSafe(tid, email, m.subject, m.html);
     }
 
     // Cambio de estado
     if (after.status !== before?.status) {
       if (after.status === 'listo_revision') {
-        const m = readyTpl(ticket);
+        const m = readyTpl(ticket, brand);
         await sendMailSafe(tid, await tenantNotifyEmail(tid), m.subject, m.html);
       } else if (after.status === 'rechazado') {
         const email = await techEmail(tid, after.techId);
-        const m = rejectedTpl(ticket, lastRejectionComment(after));
+        const m = rejectedTpl(ticket, lastRejectionComment(after), brand);
         if (email) await sendMailSafe(tid, email, m.subject, m.html);
       } else if (after.status === 'aprobado') {
         const email = await techEmail(tid, after.techId);
-        const m = approvedTpl(ticket);
+        const m = approvedTpl(ticket, brand);
         if (email) await sendMailSafe(tid, email, m.subject, m.html);
       }
     }

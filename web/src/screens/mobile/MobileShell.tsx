@@ -2,6 +2,7 @@
    Reemplaza el header recargado (pills + iconos sueltos) por una navegación inferior alcanzable
    con el pulgar. Los destinos se arman según las features de la empresa, así que el chrome es
    idéntico tenga tickets, mantenimiento, ambos, y/o wiki. */
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Icon, Avatar, confirmDialog } from '../../components/ui';
 import { useTenant } from '../../lib/tenant';
@@ -26,13 +27,15 @@ export function TechShell({ ctx, active, children }: { ctx: AppCtx; active: Tech
   const orderBadge = featMaint ? orders.filter((o) => ACTIVE_SO.includes(o.status)).length : 0;
 
   const tabs = [
-    featTickets && { key: 'tickets' as const, route: 'techDashboard', icon: 'ticket', label: t('nav.ticketsShort'), badge: ticketBadge },
+    featTickets && { key: 'tickets' as const, route: 'techDashboard', icon: 'clipboard', label: t('nav.ticketsShort'), badge: ticketBadge },
     featMaint && { key: 'orders' as const, route: 'techOrders', icon: 'wrench', label: t('mobileOrders.navShort'), badge: orderBadge },
     { key: 'calendar' as const, route: 'techCalendar', icon: 'calendar', label: t('techCal.nav'), badge: 0 },
-    featWiki && { key: 'wiki' as const, route: 'techWiki', icon: 'file', label: t('wiki.nav'), badge: 0 },
+    featWiki && { key: 'wiki' as const, route: 'techWiki', icon: 'book', label: t('wiki.nav'), badge: 0 },
   ].filter(Boolean) as { key: TechTab; route: string; icon: string; label: string; badge: number }[];
 
   const first = ctx.admin.name.split(' ')[0];
+  const activeLabel = tabs.find((tb) => tb.key === active)?.label;
+  useEffect(() => { if (activeLabel) document.title = activeLabel; }, [activeLabel]);
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>

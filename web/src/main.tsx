@@ -8,7 +8,11 @@ import './styles/layout.css';
 import { AuthProvider } from './lib/auth';
 import { TenantProvider } from './lib/tenant';
 import { DataProvider } from './lib/store';
+import { bootBranding } from './lib/branding';
 import App from './App';
+
+// Aplica la marca cacheada (paleta) antes del primer render: evita el flash del fallback.
+bootBranding();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

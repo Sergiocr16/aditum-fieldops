@@ -59,7 +59,7 @@ export default function AdminDashboard({ ctx }: { ctx: AppCtx }) {
   const { user } = useAuth();
   const { tenant } = useTenant();
   // El dashboard refleja módulos de la empresa (features) + lo visible del usuario.
-  const sees = (m: string) => canSeeModule(m, user?.role, user?.modules, tenant?.features);
+  const sees = (m: string) => canSeeModule(m, user?.roles, user?.modules, tenant?.features);
   const showTickets = sees('tickets');
   const showMaintenance = sees('serviceOrders') || sees('contracts') || sees('equipment') || sees('calendar');
   const showBilling = sees('billing');

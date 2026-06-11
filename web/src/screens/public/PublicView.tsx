@@ -4,16 +4,17 @@ import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../lib/firebase';
-import { Logo, Icon, StatusBadge, Lightbox, VideoPlayer, LangSwitcher } from '../../components/ui';
+import { Logo, BrandLogo, Icon, StatusBadge, Lightbox, VideoPlayer, LangSwitcher } from '../../components/ui';
+import { brandVars } from '../../lib/branding';
 import type { Evidence } from '../../lib/types';
 
 type ErrType = 'desactivado' | 'expirado' | '404';
 
-function PublicHeader({ ticket }: any) {
+function PublicHeader({ ticket, logoUrl }: any) {
   return (
     <div style={{ background: 'var(--navy-900)', color: '#fff' }}>
       <div style={{ maxWidth: 880, margin: '0 auto', padding: '18px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-        <Logo variant="dark" height={32} withLockup lockupColor="#fff" dark />
+        <BrandLogo logoUrl={logoUrl} variant="dark" height={32} withLockup lockupColor="#fff" dark />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <LangSwitcher dark />
           <span className="mono" style={{ fontSize: 13, color: 'rgba(255,255,255,.7)', background: 'rgba(255,255,255,.1)', padding: '5px 11px', borderRadius: 7 }}>{ticket.num}</span>
@@ -75,6 +76,7 @@ export default function PublicView() {
   const { t } = useTranslation();
   const { token } = useParams();
   const [tk, setTk] = useState<any>(null);
+  const [branding, setBranding] = useState<any>(null);
   const [err, setErr] = useState<ErrType | null>(null);
   const [loading, setLoading] = useState(true);
   const [lb, setLb] = useState<number | null>(null);
@@ -87,6 +89,7 @@ export default function PublicView() {
         const res: any = await fn({ token });
         if (cancelled) return;
         setTk(res.data.ticket);
+        setBranding(res.data.branding || null);
       } catch (e: any) {
         if (cancelled) return;
         const code = e?.details?.reason || e?.message || '404';
@@ -114,8 +117,8 @@ export default function PublicView() {
   const images: Evidence[] = tk.evidence || [];
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      <PublicHeader ticket={tk} />
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', ...brandVars(branding?.primaryColor, branding?.accentColor) } as React.CSSProperties}>
+      <PublicHeader ticket={tk} logoUrl={branding?.logoUrl} />
       <div style={{ maxWidth: 880, margin: '0 auto', padding: '28px 24px 60px' }}>
         <div style={{ marginBottom: 26 }}>
           <div style={{ fontSize: 12.5, color: 'var(--text-2)', fontWeight: 600, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>

@@ -156,8 +156,8 @@ export function EquipmentFormModal({
   );
 }
 
-/* ------------ types manager modal ------------ */
-export function TypesModal({ open, onClose, onEditTemplate }: { open: boolean; onClose: () => void; onEditTemplate?: (typeId: string) => void }) {
+/* ------------ types manager (pantalla propia) ------------ */
+export function EquipmentTypesScreen({ ctx }: { ctx: AppCtx }) {
   const { t } = useTranslation();
   const eq = useEquipment();
   const [name, setName] = useState('');
@@ -175,36 +175,36 @@ export function TypesModal({ open, onClose, onEditTemplate }: { open: boolean; o
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={t('equipment.typesTitle')} sub={t('equipment.typesSub')} width={520}
-      footer={<Button variant="ghost" onClick={onClose}>{t('common.close')}</Button>}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-        <div style={{ flex: 1 }}>
-          <Input placeholder={t('equipment.typePh')} value={name} onChange={(e: any) => setName(e.target.value)} onKeyDown={(e: any) => e.key === 'Enter' && add()} />
+    <div className="fade-in">
+      <PageHeader title={t('equipment.typesTitle')} sub={t('equipment.typesSub')} back={() => ctx.go('equipment')} />
+      <div className="card card-pad">
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, maxWidth: 520 }}>
+          <div style={{ flex: 1 }}>
+            <Input placeholder={t('equipment.typePh')} value={name} onChange={(e: any) => setName(e.target.value)} onKeyDown={(e: any) => e.key === 'Enter' && add()} />
+          </div>
+          <Button icon="plus" onClick={add}>{t('common.create')}</Button>
         </div>
-        <Button icon="plus" onClick={add}>{t('common.create')}</Button>
-      </div>
-      {eq.types.length === 0 ? (
-        <EmptyState icon="wrench" title={t('equipment.noTypes')} sub={t('equipment.noTypesSub')} />
-      ) : (
-        eq.types.map((x) => (
-          <div key={x.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-            <Icon name="wrench" size={15} style={{ color: 'var(--text-3)' }} />
-            <span style={{ flex: 1, fontSize: 13.5, fontWeight: 600, textDecoration: x.active ? 'none' : 'line-through', color: x.active ? 'var(--text)' : 'var(--text-3)' }}>{x.name}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--text-3)' }} className="mono">
-              {x.activeTemplateVersion > 0 ? `checklist v${x.activeTemplateVersion}` : t('equipment.noTemplate')}
-            </span>
-            {onEditTemplate && (
-              <Button size="sm" variant="ghost" icon="edit" onClick={() => { onClose(); onEditTemplate(x.id); }}>
+        {eq.types.length === 0 ? (
+          <EmptyState icon="cpu" title={t('equipment.noTypes')} sub={t('equipment.noTypesSub')} />
+        ) : (
+          eq.types.map((x) => (
+            <div key={x.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--border)' }}>
+              <Icon name="cpu" size={16} style={{ color: 'var(--text-3)' }} />
+              <span style={{ flex: 1, fontSize: 14, fontWeight: 600, textDecoration: x.active ? 'none' : 'line-through', color: x.active ? 'var(--text)' : 'var(--text-3)' }}>{x.name}</span>
+              <span style={{ fontSize: 11.5, color: 'var(--text-3)' }} className="mono">
+                {x.activeTemplateVersion > 0 ? `checklist v${x.activeTemplateVersion}` : t('equipment.noTemplate')}
+              </span>
+              <Button size="sm" variant="ghost" icon="edit" onClick={() => ctx.go('templateEditor', { typeId: x.id })}>
                 {t('equipment.editTemplate')}
               </Button>
-            )}
-            <Button size="sm" variant="ghost" onClick={() => eq.updateType(x.id, { active: !x.active })}>
-              {x.active ? t('equipment.typeDisable') : t('equipment.typeEnable')}
-            </Button>
-          </div>
-        ))
-      )}
-    </Modal>
+              <Button size="sm" variant="ghost" onClick={() => eq.updateType(x.id, { active: !x.active })}>
+                {x.active ? t('equipment.typeDisable') : t('equipment.typeEnable')}
+              </Button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -218,7 +218,6 @@ export default function EquipmentScreen({ ctx }: { ctx: AppCtx }) {
   const [fType, setFType] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Equipment | null>(null);
-  const [typesOpen, setTypesOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importContract, setImportContract] = useState('');
 
@@ -250,7 +249,7 @@ export default function EquipmentScreen({ ctx }: { ctx: AppCtx }) {
         sub={t('equipment.sub')}
         action={
           <>
-            <Button variant="ghost" icon="settings" onClick={() => setTypesOpen(true)}>{t('equipment.typesBtn')}</Button>
+            <Button variant="ghost" icon="settings" onClick={() => ctx.go('equipmentTypes')}>{t('equipment.typesBtn')}</Button>
             <Button variant="ghost" icon="upload" onClick={() => setImportOpen(true)}>{t('equipment.importBtn')}</Button>
             <Button icon="plus" variant="gold" onClick={() => { setEditing(null); setFormOpen(true); }}>{t('equipment.new')}</Button>
           </>
@@ -324,7 +323,6 @@ export default function EquipmentScreen({ ctx }: { ctx: AppCtx }) {
       )}
 
       <EquipmentFormModal open={formOpen} onClose={() => { setFormOpen(false); setEditing(null); }} ctx={ctx} editing={editing} />
-      <TypesModal open={typesOpen} onClose={() => setTypesOpen(false)} onEditTemplate={(typeId) => ctx.go('templateEditor', { typeId })} />
 
       <Modal open={importOpen && !importContract} onClose={() => setImportOpen(false)} title={t('equipment.importBtn')} sub={t('equipment.importPickContract')} width={480}
         footer={<Button variant="ghost" onClick={() => setImportOpen(false)}>{t('common.cancel')}</Button>}>

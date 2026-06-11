@@ -47,7 +47,7 @@ export function TechWikiList({ ctx }: { ctx: AppCtx }) {
           ))
         ) : (
           <div style={{ marginTop: 30 }}>
-            <EmptyState icon="file" title={t('wiki.emptyTechTitle')} sub={t('wiki.emptyTechSub')} />
+            <EmptyState icon="book" title={t('wiki.emptyTechTitle')} sub={t('wiki.emptyTechSub')} />
           </div>
         )}
       </div>

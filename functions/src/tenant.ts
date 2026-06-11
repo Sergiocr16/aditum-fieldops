@@ -27,13 +27,15 @@ export function assertAdmin(req: CallableRequest): Ctx {
   return { uid: req.auth.uid, tenantId, role: 'admin' };
 }
 
-/** Caller must hold one of `roles` within a tenant. */
+/** Caller must hold one of `roles` within a tenant. Soporta multi-rol: el claim
+    `roles` (array) tiene prioridad; si no existe, cae al `role` (string) legacy. */
 export function assertRoles(req: CallableRequest, roles: TenantRole[]): Ctx {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
-  const role = req.auth.token.role as TenantRole;
   const tenantId = req.auth.token.tenantId as string;
-  if (!tenantId || !roles.includes(role)) throw new HttpsError('permission-denied', 'No autorizado.');
-  return { uid: req.auth.uid, tenantId, role };
+  const userRoles = (Array.isArray(req.auth.token.roles) ? req.auth.token.roles : [req.auth.token.role]) as TenantRole[];
+  const match = userRoles.find((r) => roles.includes(r));
+  if (!tenantId || !match) throw new HttpsError('permission-denied', 'No autorizado.');
+  return { uid: req.auth.uid, tenantId, role: match };
 }
 
 /** Caller must be any signed-in tenant member. */

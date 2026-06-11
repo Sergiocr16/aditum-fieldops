@@ -76,7 +76,7 @@ export default function WikiListAdmin({ ctx }: { ctx: AppCtx }) {
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={5}>
-                    <EmptyState icon="file" title={t('wiki.emptyTitle')} sub={t('wiki.emptySub')} action={<Button variant="primary" icon="plus" onClick={() => ctx.go('wikiForm', { mode: 'new' })}>{t('wiki.create')}</Button>} />
+                    <EmptyState icon="book" title={t('wiki.emptyTitle')} sub={t('wiki.emptySub')} action={<Button variant="primary" icon="plus" onClick={() => ctx.go('wikiForm', { mode: 'new' })}>{t('wiki.create')}</Button>} />
                   </td>
                 </tr>
               ) : (

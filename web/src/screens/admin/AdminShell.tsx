@@ -1,10 +1,11 @@
 /* © 2026 Aditum — Aditum FieldOps — Admin shell (sidebar + topbar) */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Logo, Icon, Avatar, confirmDialog } from '../../components/ui';
+import { BrandLogo, Icon, Avatar, confirmDialog } from '../../components/ui';
 import { MODULES, visibleModules } from '../../lib/modules';
 import { useAuth } from '../../lib/auth';
 import { useTenant } from '../../lib/tenant';
+import { readCachedBranding } from '../../lib/branding';
 import type { AppCtx } from '../../lib/ctx';
 
 export function PageHeader({ title, sub, action, back }: any) {
@@ -36,17 +37,22 @@ export default function AdminShell({ ctx, route, children }: { ctx: AppCtx; rout
     if (ok) ctx.logout();
   };
   // Sidebar = módulos que usa la empresa (features) ∩ rol ∩ (admin) su lista `modules`.
-  const nav = visibleModules(user?.role, user?.modules, tenant?.features).map((m) => ({ key: m.key, label: t(m.labelKey), icon: m.icon, route: m.route }));
+  const nav = visibleModules(user?.roles, user?.modules, tenant?.features).map((m) => ({ key: m.key, label: t(m.labelKey), icon: m.icon, route: m.route }));
   const activeKey = MODULES.find((m) => m.routes.includes(route))?.key || '';
   const titles: any = { dashboard: t('nav.dashboard'), tickets: t('nav.tickets'), technicians: t('nav.technicians'), ticketForm: t('nav.ticket'), ticketDetail: t('nav.ticketDetail'), inventory: t('inventory.title'), wiki: t('wiki.title'), wikiForm: t('wiki.title'), tenantSettings: t('tenantSettings.title'), contracts: t('contracts.title'), contractForm: t('contracts.title'), contractDetail: t('contracts.title'), equipment: t('equipment.title'), serviceOrders: t('serviceOrders.title'), soDetail: t('serviceOrders.title'), templateEditor: t('templates.navTitle'), billing: t('billing.title'), notifySettings: t('notifySettings.title'), calendar: t('calendar.title') };
   const admin = ctx.admin;
+
+  // El título de la pestaña refleja la pantalla actual.
+  useEffect(() => {
+    document.title = titles[route] || 'Aditum';
+  }, [route, titles]);
 
   return (
     <div className="admin-shell">
       {menuOpen && <div className="sidebar-backdrop" onClick={() => setMenuOpen(false)} />}
       <aside className={'sidebar' + (menuOpen ? ' open' : '')}>
         <div className="sidebar-logo">
-          <Logo variant="dark" height={30} withLockup lockupColor="#fff" dark />
+          <BrandLogo logoUrl={tenant ? tenant.branding?.logoUrl : readCachedBranding()?.logoUrl} variant="dark" height={30} withLockup={false} dark />
         </div>
         <nav className="sidebar-nav">
           {nav.map((n) => (
@@ -76,9 +82,8 @@ export default function AdminShell({ ctx, route, children }: { ctx: AppCtx; rout
               <Icon name="logout" size={16} />
             </button>
           </div>
-          <div style={{ textAlign: 'center', fontSize: 10.5, color: 'rgba(238,243,247,.4)', lineHeight: 1.5 }}>
+          <div style={{ textAlign: 'center', fontSize: 10.5, color: 'rgba(238,243,247,.4)' }}>
             © {new Date().getFullYear()} Aditum
-            <div style={{ fontSize: 10, color: 'rgba(238,243,247,.3)' }}>{t('brand.developedBy')}</div>
           </div>
         </div>
       </aside>

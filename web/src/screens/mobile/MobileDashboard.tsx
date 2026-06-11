@@ -1,7 +1,7 @@
 /* © 2026 Aditum — Aditum FieldOps — Technician mobile dashboard */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Icon, StatusBadge, PriorityChip, EmptyState } from '../../components/ui';
+import { Icon, BrandLogo, StatusBadge, PriorityChip, EmptyState } from '../../components/ui';
 import { useTenant } from '../../lib/tenant';
 import { tenantHasFeature } from '../../lib/modules';
 import { today } from '../../lib/time';
@@ -10,6 +10,8 @@ import type { AppCtx } from '../../lib/ctx';
 import type { Ticket } from '../../lib/types';
 
 export function MobileHeader({ title, onBack, onLogout, sub }: any) {
+  const { tenant } = useTenant();
+  useEffect(() => { if (title) document.title = String(title); }, [title]);
   return (
     <div style={{ background: 'var(--navy-800)', color: '#fff', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, position: 'sticky', top: 0, zIndex: 20 }}>
       {onBack ? (
@@ -17,7 +19,7 @@ export function MobileHeader({ title, onBack, onLogout, sub }: any) {
           <Icon name="arrowLeft" size={19} />
         </button>
       ) : (
-        <img src="/assets/aditum-horizontal.png" style={{ height: 26, filter: 'brightness(0) invert(1)' }} />
+        <BrandLogo logoUrl={tenant?.branding?.logoUrl} variant="dark" height={26} withLockup={false} dark />
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: onBack ? 15 : 13, fontWeight: onBack ? 700 : 500, color: onBack ? '#fff' : 'rgba(255,255,255,.65)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>

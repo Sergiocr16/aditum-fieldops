@@ -13,6 +13,7 @@ export default function PublicReschedule() {
   const { t } = useTranslation();
   const { token } = useParams();
   const [order, setOrder] = useState<any>(null);
+  const [branding, setBranding] = useState<any>(null);
   const [slots, setSlots] = useState<DaySlots[]>([]);
   const [picked, setPicked] = useState<{ date: string; time: string } | null>(null);
   const [err, setErr] = useState<'desactivado' | 'expirado' | '404' | null>(null);
@@ -51,6 +52,7 @@ export default function PublicReschedule() {
         const res: any = await fn({ token, purpose: 'so_reschedule' });
         if (cancelled) return;
         setOrder(res.data.order);
+        setBranding(res.data.branding || null);
         await loadSlots();
       } catch (e: any) {
         if (!cancelled) handleErr(e);
@@ -98,7 +100,7 @@ export default function PublicReschedule() {
 
   if (used)
     return (
-      <PublicShell>
+      <PublicShell branding={branding}>
         <div className="card card-pad fade-in" style={{ textAlign: 'center', padding: '40px 28px' }}>
           <div style={{ width: 64, height: 64, borderRadius: 16, background: 'var(--st-apro-bg)', color: 'var(--st-apro-fg)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
             <Icon name="checkCircle" size={30} />
@@ -113,7 +115,7 @@ export default function PublicReschedule() {
 
   if (done)
     return (
-      <PublicShell>
+      <PublicShell branding={branding}>
         <div className="card card-pad fade-in" style={{ textAlign: 'center', padding: '44px 28px' }}>
           <div style={{ width: 70, height: 70, borderRadius: 18, background: 'var(--st-apro-bg)', color: 'var(--st-apro-fg)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px' }}>
             <Icon name="checkCircle" size={34} />
@@ -127,7 +129,7 @@ export default function PublicReschedule() {
     );
 
   return (
-    <PublicShell>
+    <PublicShell branding={branding}>
       <div className="card card-pad fade-in" style={{ padding: '28px 26px' }}>
         <h1 style={{ margin: '0 0 6px', fontSize: 21, fontWeight: 700 }}>{t('publicReschedule.title')}</h1>
         <p style={{ margin: '0 0 18px', fontSize: 14, color: 'var(--text-2)', lineHeight: 1.55 }}>

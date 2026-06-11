@@ -129,7 +129,7 @@ export default function TicketDetailAdmin({ ctx, id }: { ctx: AppCtx; id: string
 
       <div className="detail-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
-          <Block title={t('ticketDetail.generalInfo')} icon="ticket">
+          <Block title={t('ticketDetail.generalInfo')} icon="clipboard">
             <div className="info-2col">
               <InfoRow label={t('ticketDetail.client')} value={tk.client} />
               <InfoRow label={t('ticketDetail.site')} value={tk.site} />
@@ -179,7 +179,7 @@ export default function TicketDetailAdmin({ ctx, id }: { ctx: AppCtx; id: string
           </Block>
 
           {((tk.materials && tk.materials.length > 0) || tk.materialsNote) && (
-            <Block title={t('materials.reported')} icon="ticket">
+            <Block title={t('materials.reported')} icon="box">
               {tk.materials && tk.materials.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: tk.materialsNote ? 12 : 0 }}>
                   {tk.materials.map((mt, i) => (

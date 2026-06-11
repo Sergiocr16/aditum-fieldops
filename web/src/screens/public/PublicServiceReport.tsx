@@ -4,7 +4,8 @@ import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../lib/firebase';
-import { Logo, Icon, SOStatusBadge, Lightbox, LangSwitcher } from '../../components/ui';
+import { BrandLogo, Icon, SOStatusBadge, Lightbox, LangSwitcher } from '../../components/ui';
+import { brandVars } from '../../lib/branding';
 import DynamicChecklist from '../../components/DynamicChecklist';
 import { PublicError } from './PublicView';
 
@@ -12,6 +13,7 @@ export default function PublicServiceReport() {
   const { t } = useTranslation();
   const { token } = useParams();
   const [report, setReport] = useState<any>(null);
+  const [branding, setBranding] = useState<any>(null);
   const [err, setErr] = useState<'desactivado' | 'expirado' | '404' | null>(null);
   const [loading, setLoading] = useState(true);
   const [lb, setLb] = useState<number | null>(null);
@@ -22,7 +24,7 @@ export default function PublicServiceReport() {
       try {
         const fn = httpsCallable(functions, 'getPublicServiceReport');
         const res: any = await fn({ token });
-        if (!cancelled) setReport(res.data.report);
+        if (!cancelled) { setReport(res.data.report); setBranding(res.data.branding || null); }
       } catch (e: any) {
         if (cancelled) return;
         const code = e?.details?.reason || '404';
@@ -54,10 +56,10 @@ export default function PublicServiceReport() {
   );
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', ...brandVars(branding?.primaryColor, branding?.accentColor) } as React.CSSProperties}>
       <div style={{ background: 'var(--navy-900)', color: '#fff' }}>
         <div style={{ maxWidth: 880, margin: '0 auto', padding: '18px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-          <Logo variant="dark" height={32} withLockup lockupColor="#fff" dark />
+          <BrandLogo logoUrl={branding?.logoUrl} variant="dark" height={32} withLockup lockupColor="#fff" dark />
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <LangSwitcher dark />
             <span className="mono" style={{ fontSize: 13, color: 'rgba(255,255,255,.7)', background: 'rgba(255,255,255,.1)', padding: '5px 11px', borderRadius: 7 }}>{report.num}</span>

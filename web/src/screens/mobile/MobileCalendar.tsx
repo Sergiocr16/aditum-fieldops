@@ -150,7 +150,7 @@ export default function MobileCalendar({ ctx }: { ctx: AppCtx }) {
                   style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 13 }}
                 >
                   <span style={{ width: 40, height: 40, borderRadius: 11, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', background: it.kind === 'ticket' ? 'var(--surface-2)' : 'var(--gold-50)', color: it.kind === 'ticket' ? 'var(--navy-700)' : 'var(--gold-600)' }}>
-                    <Icon name={it.kind === 'ticket' ? 'ticket' : 'wrench'} size={18} />
+                    <Icon name={it.kind === 'ticket' ? 'clipboard' : 'wrench'} size={18} />
                   </span>
                   <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>

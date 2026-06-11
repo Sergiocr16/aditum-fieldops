@@ -113,6 +113,15 @@ function TenantDetail({ tenant, onBack }: { tenant: Tenant; onBack: () => void }
     }
   };
 
+  const toggleWhiteLabel = async () => {
+    try {
+      await call('updateTenant')({ tenantId: tenant.id, whiteLabel: !(tenant.whiteLabel === true) });
+      toast(t('common.saved'), 'success');
+    } catch (e: any) {
+      toast(e?.message || 'Error', 'error');
+    }
+  };
+
   const toggleActive = async () => {
     const ok = await confirmDialog({
       title: tenant.active ? t('superadmin.deactivateTitle') : t('superadmin.activateTitle'),
@@ -135,6 +144,23 @@ function TenantDetail({ tenant, onBack }: { tenant: Tenant; onBack: () => void }
   const [aEmail, setAEmail] = useState('');
   const [aBusy, setABusy] = useState(false);
   const [creds, setCreds] = useState<{ name: string; email: string; password: string } | null>(null);
+  const [editAdmin, setEditAdmin] = useState<AppUser | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editBusy, setEditBusy] = useState(false);
+
+  const saveAdminName = async () => {
+    if (!editAdmin || !editName.trim()) return;
+    setEditBusy(true);
+    try {
+      await call('updateTenantAdmin')({ uid: editAdmin.id, name: editName.trim() });
+      toast(t('common.saved'), 'success');
+      setEditAdmin(null);
+    } catch (e: any) {
+      toast(e?.message || 'Error', 'error');
+    } finally {
+      setEditBusy(false);
+    }
+  };
 
   const createAdmin = async () => {
     if (!aName.trim() || !aEmail.trim()) return;
@@ -232,6 +258,12 @@ function TenantDetail({ tenant, onBack }: { tenant: Tenant; onBack: () => void }
                 <span style={{ fontSize: 13.5, color: 'var(--text-2)' }}>{tenant.active ? t('superadmin.active') : t('superadmin.inactive')}</span>
               </div>
             </Field>
+            <Field label={t('superadmin.fWhiteLabel')} hint={t('superadmin.fWhiteLabelHint')}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 42 }}>
+                <Toggle on={tenant.whiteLabel === true} onClick={toggleWhiteLabel} />
+                <span style={{ fontSize: 13.5, color: 'var(--text-2)' }}>{tenant.whiteLabel === true ? t('superadmin.wlOn') : t('superadmin.wlOff')}</span>
+              </div>
+            </Field>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
             <Button onClick={saveGeneral} disabled={savingGeneral}>{savingGeneral ? '…' : t('common.save')}</Button>
@@ -262,6 +294,9 @@ function TenantDetail({ tenant, onBack }: { tenant: Tenant; onBack: () => void }
                   <div style={{ fontSize: 12.5, color: 'var(--text-3)' }} className="mono">{a.email}</div>
                 </div>
                 <StatusDot ok={a.active} label={a.active ? t('superadmin.active') : t('superadmin.inactive')} />
+                <button className="icon-btn" title={t('common.edit')} onClick={() => { setEditAdmin(a); setEditName(a.name); }} style={{ width: 32, height: 32 }}>
+                  <Icon name="edit" size={15} />
+                </button>
               </div>
             ))
           )}
@@ -278,6 +313,16 @@ function TenantDetail({ tenant, onBack }: { tenant: Tenant; onBack: () => void }
                 <Input type="email" value={aEmail} onChange={(e: any) => setAEmail(e.target.value)} />
               </Field>
             </div>
+          </Modal>
+
+          <Modal open={!!editAdmin} onClose={() => setEditAdmin(null)} title={t('superadmin.editAdmin')} sub={editAdmin?.email}
+            footer={<>
+              <Button variant="ghost" onClick={() => setEditAdmin(null)}>{t('common.cancel')}</Button>
+              <Button onClick={saveAdminName} disabled={editBusy || !editName.trim()}>{editBusy ? '…' : t('common.saveChanges')}</Button>
+            </>}>
+            <Field label={t('superadmin.fAdminName')} required>
+              <Input value={editName} onChange={(e: any) => setEditName(e.target.value)} onKeyDown={(e: any) => { if (e.key === 'Enter') saveAdminName(); }} />
+            </Field>
           </Modal>
         </div>
       )}

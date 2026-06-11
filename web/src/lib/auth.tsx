@@ -8,6 +8,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import { clearCachedBranding } from './branding';
 import type { Role } from './types';
 
 export interface SessionUser {
@@ -15,6 +16,9 @@ export interface SessionUser {
   email: string;
   name: string;
   role: Role;
+  /** Roles del usuario (multi-rol para personal de escritorio). El personal puede ser
+      coordinador y/o facturación. Para los demás es [role]. */
+  roles: Role[];
   tenantId: string | null;
   initials: string;
   active: boolean;
@@ -46,12 +50,15 @@ async function resolveSession(fbUser: User): Promise<SessionUser> {
     // superadmin may operate without a users doc; claims are the source of truth
   }
   if (!role) role = data.role || 'tech';
+  const claimRoles = Array.isArray(tokenResult.claims.roles) ? (tokenResult.claims.roles as Role[]) : null;
+  const roles: Role[] = claimRoles || (Array.isArray(data.roles) && data.roles.length ? (data.roles as Role[]) : [role as Role]);
   const active = role === 'superadmin' ? true : data.active !== false;
   return {
     uid: fbUser.uid,
     email: fbUser.email || data.email || '',
     name: data.name || fbUser.displayName || fbUser.email || '',
     role: role as Role,
+    roles,
     tenantId: role === 'superadmin' ? null : tenantId,
     initials: data.initials || (fbUser.email || '?').slice(0, 2).toUpperCase(),
     active,
@@ -94,6 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
+    clearCachedBranding(); // no arrastrar la marca del tenant a un login distinto
     await signOut(auth);
   };
 

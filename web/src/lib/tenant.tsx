@@ -4,6 +4,7 @@ import { collection, doc, onSnapshot, type CollectionReference, type DocumentRef
 import { db } from './firebase';
 import { useAuth } from './auth';
 import i18n from '../i18n';
+import { applyBrandVars, clearBrandVars, cacheBranding } from './branding';
 import type { Tenant } from './types';
 
 interface TenantState {
@@ -51,17 +52,16 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     );
   }, [tid]);
 
-  // Branding → CSS variables (navy/gold defaults stay if the tenant has none).
+  // Branding → escala completa de variables CSS (defaults Aditum si el tenant no tiene marca).
   useEffect(() => {
     const root = document.documentElement;
     const b = tenant?.branding;
-    if (b?.primaryColor) root.style.setProperty('--navy-800', b.primaryColor);
-    if (b?.accentColor) root.style.setProperty('--gold', b.accentColor);
-    return () => {
-      root.style.removeProperty('--navy-800');
-      root.style.removeProperty('--gold');
-    };
-  }, [tenant?.branding?.primaryColor, tenant?.branding?.accentColor]);
+    if (b?.primaryColor || b?.accentColor) applyBrandVars(root, b?.primaryColor, b?.accentColor);
+    else clearBrandVars(root);
+    // Cachear logo + paleta del tenant para aplicarlos sin flash en el próximo arranque.
+    if (tenant) cacheBranding(b);
+    return () => clearBrandVars(root);
+  }, [tenant?.branding?.primaryColor, tenant?.branding?.accentColor, tenant?.branding?.logoUrl]);
 
   // Idioma de la empresa: lo fija el admin y manda para todos los usuarios del tenant.
   useEffect(() => {

@@ -9,6 +9,7 @@ import { Icon, Button, Field, Input, toast } from '../../components/ui';
 import { PageHeader } from './AdminShell';
 import AdminModules from './AdminModules';
 import TenantFeatures from './TenantFeatures';
+import BrandingSettings from './BrandingSettings';
 import type { AppCtx } from '../../lib/ctx';
 
 interface SmtpMeta {
@@ -114,6 +115,8 @@ export default function TenantSettings({ ctx }: { ctx: AppCtx }) {
           ))}
         </div>
       </div>
+
+      {tenant?.whiteLabel === true && <BrandingSettings />}
 
       <div style={{ marginBottom: 16 }}>
         <TenantFeatures />

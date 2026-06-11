@@ -27,7 +27,7 @@ import TenantSettings from './screens/admin/TenantSettings';
 import Contracts from './screens/admin/Contracts';
 import ContractForm from './screens/admin/ContractForm';
 import ContractDetail from './screens/admin/ContractDetail';
-import EquipmentScreen from './screens/admin/Equipment';
+import EquipmentScreen, { EquipmentTypesScreen } from './screens/admin/Equipment';
 import ServiceOrders from './screens/admin/ServiceOrders';
 import ServiceOrderDetail from './screens/admin/ServiceOrderDetail';
 import TemplateEditor from './screens/admin/TemplateEditor';
@@ -39,6 +39,7 @@ import MobileSignature from './screens/mobile/MobileSignature';
 import PublicServiceReport from './screens/public/PublicServiceReport';
 import PublicConfirm from './screens/public/PublicConfirm';
 import PublicReschedule from './screens/public/PublicReschedule';
+import PublicReset from './screens/public/PublicReset';
 import MobileAvailability from './screens/mobile/MobileAvailability';
 import NotifySettings from './screens/admin/NotifySettings';
 import ServiceCalendar from './screens/admin/ServiceCalendar';
@@ -124,7 +125,7 @@ function AuthedApp() {
   const isDesktop = user!.role === 'admin' || user!.role === 'coordinador' || user!.role === 'facturacion';
   if (isDesktop) {
     // Guard de módulos: si el rol/empresa no tiene acceso a la ruta, lo mandamos al dashboard.
-    if (!canAccessRoute(route, user!.role, user!.modules, tenant?.features)) {
+    if (!canAccessRoute(route, user!.roles, user!.modules, tenant?.features)) {
       return (
         <AdminShell ctx={ctx} route="dashboard">
           <AdminDashboard ctx={ctx} />
@@ -146,6 +147,7 @@ function AuthedApp() {
     else if (route === 'contractForm') inner = <ContractForm ctx={ctx} mode={params.mode} id={params.id} />;
     else if (route === 'contractDetail') inner = <ContractDetail ctx={ctx} id={params.id} />;
     else if (route === 'equipment') inner = <EquipmentScreen ctx={ctx} />;
+    else if (route === 'equipmentTypes') inner = <EquipmentTypesScreen ctx={ctx} />;
     else if (route === 'serviceOrders') inner = <ServiceOrders ctx={ctx} />;
     else if (route === 'soDetail') inner = <ServiceOrderDetail ctx={ctx} id={params.id} />;
     else if (route === 'templateEditor') inner = <TemplateEditor ctx={ctx} typeId={params.typeId} />;
@@ -184,9 +186,13 @@ function AuthedApp() {
 
 function Root() {
   const { user, loading } = useAuth();
+  const { loading: tenantLoading } = useTenant();
   if (loading) return <Spinner />;
   if (!user) return <Login />;
   if (user.role === 'superadmin') return <SuperAdminApp />;
+  // Esperar a que cargue la marca del tenant antes de pintar el shell: así no se ve
+  // un color/azul previo durante la carga (la pantalla de carga queda neutra).
+  if (tenantLoading) return <Spinner />;
   return <AuthedApp />;
 }
 
@@ -198,6 +204,7 @@ export default function App() {
         <Route path="/r/:token" element={<PublicServiceReport />} />
         <Route path="/confirm/:token" element={<PublicConfirm />} />
         <Route path="/reschedule/:token" element={<PublicReschedule />} />
+        <Route path="/reset" element={<PublicReset />} />
         <Route path="*" element={<Root />} />
       </Routes>
       <Toaster />

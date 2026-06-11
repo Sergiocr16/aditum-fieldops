@@ -214,7 +214,7 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
         </MBlock>
 
         {showMaterials && (
-        <MBlock icon="ticket" q={t('materials.title')}>
+        <MBlock icon="box" q={t('materials.title')}>
           {materials.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
               {materials.map((mt, i) => (

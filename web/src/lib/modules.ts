@@ -21,17 +21,19 @@ export type TenantFeature = 'tickets' | 'maintenance' | 'inventory' | 'wiki';
 export const TENANT_FEATURES: TenantFeature[] = ['tickets', 'maintenance', 'inventory', 'wiki'];
 
 export const MODULES: ModuleDef[] = [
+  // Orden: panorama → trabajo operativo (OT, OS, calendario) → cadena de mantenimiento
+  // (contratos, equipos, inventario) → facturación → personas → referencia → ajustes.
   { key: 'dashboard', labelKey: 'nav.dashboard', icon: 'dashboard', route: 'dashboard', routes: ['dashboard'], locked: true },
-  { key: 'tickets', labelKey: 'nav.tickets', icon: 'ticket', route: 'tickets', routes: ['tickets', 'ticketForm', 'ticketDetail'], feature: 'tickets' },
-  { key: 'technicians', labelKey: 'nav.technicians', icon: 'users', route: 'technicians', routes: ['technicians'] },
-  { key: 'contracts', labelKey: 'contracts.nav', icon: 'file', route: 'contracts', routes: ['contracts', 'contractForm', 'contractDetail'], feature: 'maintenance' },
-  { key: 'equipment', labelKey: 'equipment.nav', icon: 'wrench', route: 'equipment', routes: ['equipment', 'templateEditor'], feature: 'maintenance' },
-  { key: 'serviceOrders', labelKey: 'serviceOrders.nav', icon: 'ticket', route: 'serviceOrders', routes: ['serviceOrders', 'soDetail'], feature: 'maintenance' },
+  { key: 'tickets', labelKey: 'nav.tickets', icon: 'clipboard', route: 'tickets', routes: ['tickets', 'ticketForm', 'ticketDetail'], feature: 'tickets' },
+  { key: 'serviceOrders', labelKey: 'serviceOrders.nav', icon: 'wrench', route: 'serviceOrders', routes: ['serviceOrders', 'soDetail'], feature: 'maintenance' },
   { key: 'calendar', labelKey: 'calendar.nav', icon: 'calendar', route: 'calendar', routes: ['calendar'], feature: 'maintenance' },
-  { key: 'billing', labelKey: 'billing.nav', icon: 'download', route: 'billing', routes: ['billing'], feature: 'maintenance' },
-  { key: 'inventory', labelKey: 'inventory.nav', icon: 'building', route: 'inventory', routes: ['inventory'], feature: 'inventory' },
-  { key: 'wiki', labelKey: 'wiki.nav', icon: 'globe', route: 'wiki', routes: ['wiki', 'wikiForm'], feature: 'wiki' },
-  { key: 'notifySettings', labelKey: 'notifySettings.nav', icon: 'bell', route: 'notifySettings', routes: ['notifySettings'], feature: 'maintenance' },
+  { key: 'contracts', labelKey: 'contracts.nav', icon: 'file', route: 'contracts', routes: ['contracts', 'contractForm', 'contractDetail'], feature: 'maintenance' },
+  { key: 'equipment', labelKey: 'equipment.nav', icon: 'cpu', route: 'equipment', routes: ['equipment', 'equipmentTypes', 'templateEditor'], feature: 'maintenance' },
+  { key: 'inventory', labelKey: 'inventory.nav', icon: 'box', route: 'inventory', routes: ['inventory'], feature: 'inventory' },
+  { key: 'billing', labelKey: 'billing.nav', icon: 'receipt', route: 'billing', routes: ['billing'], feature: 'maintenance' },
+  { key: 'technicians', labelKey: 'nav.technicians', icon: 'users', route: 'technicians', routes: ['technicians'] },
+  { key: 'wiki', labelKey: 'wiki.nav', icon: 'book', route: 'wiki', routes: ['wiki', 'wikiForm'], feature: 'wiki' },
+  { key: 'notifySettings', labelKey: 'notifySettings.nav', icon: 'sliders', route: 'notifySettings', routes: ['notifySettings'], feature: 'maintenance' },
   { key: 'tenantSettings', labelKey: 'tenantSettings.nav', icon: 'settings', route: 'tenantSettings', routes: ['tenantSettings'], locked: true },
 ];
 
@@ -55,13 +57,16 @@ export const ROLE_MODULES: Record<string, string[]> = {
   facturacion: ['dashboard', 'billing'],
 };
 
-/** ¿Este usuario puede ver el módulo? Combina: feature del tenant (qué usa la
-    empresa) + rol + (para admin) su lista `modules`. */
-export function canSeeModule(moduleKey: string, role: string | undefined, modules?: string[] | null, features?: string[] | null): boolean {
+/** ¿Este usuario puede ver el módulo? Combina: feature del tenant (qué usa la empresa)
+    + roles (multi-rol: unión de los módulos de coordinador/facturación) + (admin) su lista `modules`. */
+export function canSeeModule(moduleKey: string, roles: string[] | undefined, modules?: string[] | null, features?: string[] | null): boolean {
   const def = MODULES.find((m) => m.key === moduleKey);
   if (!moduleEnabledByTenant(def, features)) return false; // la empresa no usa esa feature
-  if (role === 'coordinador' || role === 'facturacion') {
-    return (ROLE_MODULES[role] || []).includes(moduleKey);
+  const rs = roles || [];
+  const deskRoles = rs.filter((r) => r === 'coordinador' || r === 'facturacion');
+  if (!rs.includes('admin') && deskRoles.length) {
+    // Personal de escritorio: la unión de los módulos de sus roles.
+    return deskRoles.some((r) => (ROLE_MODULES[r] || []).includes(moduleKey));
   }
   // admin
   if (def?.locked) return true;
@@ -70,13 +75,13 @@ export function canSeeModule(moduleKey: string, role: string | undefined, module
 }
 
 /** ¿Puede entrar a esta ruta? (resuelve la ruta a su módulo). */
-export function canAccessRoute(route: string, role: string | undefined, modules?: string[] | null, features?: string[] | null): boolean {
+export function canAccessRoute(route: string, roles: string[] | undefined, modules?: string[] | null, features?: string[] | null): boolean {
   const def = MODULES.find((m) => m.routes.includes(route));
   if (!def) return true; // rutas sueltas no mapeadas: no las bloqueamos
-  return canSeeModule(def.key, role, modules, features);
+  return canSeeModule(def.key, roles, modules, features);
 }
 
 /** Lista de módulos visibles para el usuario, en orden del catálogo. */
-export function visibleModules(role: string | undefined, modules?: string[] | null, features?: string[] | null): ModuleDef[] {
-  return MODULES.filter((m) => canSeeModule(m.key, role, modules, features));
+export function visibleModules(roles: string[] | undefined, modules?: string[] | null, features?: string[] | null): ModuleDef[] {
+  return MODULES.filter((m) => canSeeModule(m.key, roles, modules, features));
 }

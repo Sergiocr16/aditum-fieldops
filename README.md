@@ -125,6 +125,23 @@ npx firebase-tools@13 deploy --project fieldops-aditum --non-interactive
 - **Técnico**: solo sus tickets asignados + wiki publicada.
 - **Público**: sin login; solo `getPublicTicket` con un token **activo** (muestra el reporte saneado).
 
+## Pantalla de acceso (login)
+
+`web/src/screens/Login.tsx` es un login **responsive a medida** (no un formulario plano). Tiene su propia
+regla en [`.claude/rules/login.md`](./.claude/rules/login.md) — **léela antes de modificarlo**.
+
+- **Desktop (> 860px):** split invertido **40% formulario (izquierda) / 60% banner (derecha)**. El banner
+  es un carrusel de fotos **contenido en su panel** (sin `scale`, para que no se vea con zoom), con scrim
+  y la marca **centrada** (logo arriba, hero al medio, `© Aditum` abajo). El formulario va en un panel
+  **plano** (degradado claro), sin tarjeta.
+- **Móvil (≤ 860px):** el banner se oculta y el formulario pasa a una **card flotante sobre el carrusel a
+  pantalla completa**. Un solo estado de `slide` alimenta ambos carruseles (sincronizados, ~8.5s, sin dots).
+- El **copy del hero** sale de i18n (`auth.heroBadge/heroTitle/heroText`) y describe el producto:
+  *gestión de trabajo técnico en sitio*.
+- **Recuperar contraseña (self-service):** enlace bajo el campo de contraseña → modal → callable
+  `requestPasswordReset` (anti-enumeración, correo **branded del tenant**) → página propia
+  `/reset?oobCode=...` (`screens/public/PublicReset.tsx`). No se usa la pantalla genérica de Firebase.
+
 ## Funciones de negocio destacadas
 
 - **Técnicos**: la **contraseña se genera automáticamente** (oculta en el formulario) y se muestra en la
@@ -184,10 +201,49 @@ que lo creado aparece de inmediato en la app.
 4. Usá el skill **`/crear-ticket-fieldops`** o pedí en lenguaje natural: *"creá un ticket de instalación de
    lector QR en Vista Real para Carlos, prioridad alta"*.
 
-Tools del MCP: `create_ticket`, `list_technicians`, `list_tickets`, `get_ticket`, `assign_ticket`,
-`add_checklist_items`, `wiki_list_pages`, `wiki_get_page`, `wiki_create_page`, `wiki_update_page`,
-`wiki_set_status`, `wiki_list_categories`, `wiki_create_category`, `inventory_list`,
-`inventory_low_stock`, `inventory_upsert`, `inventory_adjust`, `inventory_delete`, `inventory_movements`.
+Tools del MCP (todas tenant-scoped a `tenants/{MCP_TENANT_ID}/…`):
+
+- **Tickets:** `create_ticket`, `list_tickets`, `get_ticket`, `assign_ticket`, `add_checklist_items`,
+  `list_technicians`; ciclo de vida: `approve_ticket`, `reject_ticket`, `close_ticket`,
+  `set_ticket_status`, `add_ticket_comment` (correos y rebaja de stock los aplica el trigger).
+- **Personal / usuarios** (Auth Admin SDK, solo el MCP interno stdio): `list_staff`, `create_technician`
+  (técnico o escritorio coordinador/facturación; devuelve la contraseña inicial), `update_technician`
+  (nombre/teléfono/correo/activo/roles multi-rol), `reset_technician_password`,
+  `set_technician_availability` (horario semanal), `set_admin_modules` (qué módulos ve un admin).
+- **Wiki:** `wiki_list_categories`, `wiki_create_category`, `wiki_list_pages`, `wiki_get_page`,
+  `wiki_create_page`, `wiki_update_page`, `wiki_set_status`.
+- **Mantenimiento — contratos:** `list_contracts`, `get_contract`, `create_contract` (CT-####),
+  `update_contract`, `delete_contract` (rechaza si tiene equipos).
+- **Mantenimiento — equipos y tipos:** `list_equipment_types`, **`create_equipment_type`**,
+  `update_equipment_type`, `delete_equipment_type` (rechaza si está en uso), `list_equipment`,
+  `create_equipment` (resuelve/crea el tipo por nombre), `update_equipment`, `delete_equipment`.
+- **Mantenimiento — plantillas de checklist (por tipo, versionadas):** `list_checklist_templates`,
+  **`publish_checklist_template`** (publica una versión inmutable, supersede la anterior y mueve
+  `activeTemplateVersion`; las OS la cargan al iniciar).
+- **Mantenimiento — órdenes de servicio (revisiones):** `list_service_orders`, `get_service_order`,
+  **`create_service_order`** (OS-####; toma cliente/equipo del contrato, hereda el técnico, estado
+  inicial `PROGRAMADA`); ciclo de vida: `confirm_service_order`, `reschedule_service_order`,
+  `start_service_order` (carga el checklist de la plantilla del tipo), `complete_service_order` (firma →
+  el trigger factura y recalcula la cadencia), `cancel_service_order`; y **`run_scheduler`** (genera las
+  preventivas del horizonte, idempotente).
+- **Facturación:** `list_invoice_items`, `list_invoices`, `consolidate_invoice_items` (FC-####; marca los
+  ítems facturados y mueve las OS a `FACTURADA`), `export_invoice_csv`.
+- **Inventario:** `inventory_list`, `inventory_low_stock`, `inventory_upsert`, `inventory_adjust`,
+  `inventory_delete`, `inventory_movements`.
+
+> ⚠️ El server MCP escribe en **producción** (Admin SDK). Tras editar `mcp/src/`, recompilá
+> (`npm --prefix mcp run build`) y **reiniciá Claude Code** para que tome las tools nuevas.
+>
+> **Validación contra emuladores (sin tocar prod):** con los emuladores de Firestore **y Auth** arriba,
+> `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099
+> FIREBASE_PROJECT_ID=demo-aditum-fieldops node mcp/scripts/validate-maintenance.mjs` ejercita el flujo
+> completo end-to-end (tipo → contrato → equipo → plantilla → orden de servicio → ciclo de vida →
+> facturación → personal) en un tenant desechable y reporta `N ok, 0 fallos` (hoy **58/58**).
+
+**Fuera del MCP a propósito:** superadmin / gestión de tenants (multi-tenant), generación de **links
+públicos**, gestión de **API keys MCP** (es superadmin) y la **config SMTP** (cifra el password con Cloud
+KMS y el "Test" usa secrets de Functions; se administra desde la web). El MCP cubre todo lo demás del
+día a día del tenant.
 
 ## Seguridad
 
@@ -200,8 +256,9 @@ Tools del MCP: `create_ticket`, `list_technicians`, `list_tickets`, `get_ticket`
 
 ## Contribuir / cómo agregar features
 
-Lee [CLAUDE.md](./CLAUDE.md) y `.claude/rules/`. Skills: `/add-screen`, `/add-ticket-field`,
-`/add-i18n-keys`, `/deploy-fieldops`, `/crear-ticket-fieldops`.
+Lee [CLAUDE.md](./CLAUDE.md) y `.claude/rules/` (`ui-design-system`, `i18n`, `firebase`, `security`,
+`workflow`, **`login`**). Skills: `/add-screen`, `/add-ticket-field`, `/add-i18n-keys`,
+`/deploy-fieldops`, `/crear-ticket-fieldops`.
 
 Convención: **no se hace commit/push automático** (salvo pedido explícito). No se exporta PDF; el
 entregable compartible es el link público.

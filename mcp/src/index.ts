@@ -24,7 +24,7 @@ const TENANT_ID = process.env.MCP_TENANT_ID || 'aditum';
 const ACTOR = process.env.MCP_ACTOR || 'Admin';
 
 const server = new McpServer({ name: 'aditum-fieldops', version: '2.0.0' });
-registerTools(server, db, TENANT_ID, ACTOR);
+registerTools(server, db, TENANT_ID, ACTOR, admin.auth());
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

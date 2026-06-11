@@ -4,6 +4,7 @@ import * as admin from 'firebase-admin';
 import { createHash, randomBytes } from 'crypto';
 import { nowCR, initialsOf, validTenantId, DEFAULT_BRANDING, DEFAULT_NUMBERING, TenantDoc } from './shared';
 import { assertAdmin, assertSuperadmin, tenantRef, tcol } from './tenant';
+import { invalidateBranding } from './notifications';
 
 const db = () => admin.firestore();
 
@@ -43,7 +44,7 @@ const VALID_FEATURES = ['tickets', 'maintenance', 'inventory', 'wiki'];
 
 /** Superadmin edits any tenant; a tenant admin can edit branding/notifyEmail/features of their own. */
 export const updateTenant = onCall(async (req) => {
-  const { tenantId, name, active, branding, numbering, notifyEmail, features, techEditAvailability, language } = req.data || {};
+  const { tenantId, name, active, branding, numbering, notifyEmail, features, techEditAvailability, language, whiteLabel } = req.data || {};
   if (!tenantId) throw new HttpsError('invalid-argument', 'tenantId es requerido.');
   const isSuper = req.auth?.token?.role === 'superadmin';
   if (!isSuper) {
@@ -66,12 +67,18 @@ export const updateTenant = onCall(async (req) => {
     };
   }
   if (branding && typeof branding === 'object') {
-    const cur = (snap.data() as any).branding || DEFAULT_BRANDING;
+    const data = snap.data() as any;
+    // La personalización de marca (logo/paleta) requiere que el tenant sea white-label.
+    if (!isSuper && data.whiteLabel !== true) {
+      throw new HttpsError('permission-denied', 'La personalización de marca no está habilitada para esta empresa.');
+    }
+    const cur = data.branding || DEFAULT_BRANDING;
+    const hexOr = (v: any, fallback: string) => (/^#[0-9a-fA-F]{6}$/.test(String(v || '')) ? String(v) : fallback);
     patch.branding = {
       appName: String(branding.appName ?? cur.appName).slice(0, 60),
       logoUrl: String(branding.logoUrl ?? cur.logoUrl).slice(0, 500),
-      primaryColor: String(branding.primaryColor ?? cur.primaryColor).slice(0, 20),
-      accentColor: String(branding.accentColor ?? cur.accentColor).slice(0, 20),
+      primaryColor: hexOr(branding.primaryColor ?? cur.primaryColor, cur.primaryColor),
+      accentColor: hexOr(branding.accentColor ?? cur.accentColor, cur.accentColor),
     };
   }
   if (typeof notifyEmail === 'string') patch.notifyEmail = notifyEmail.trim();
@@ -82,7 +89,10 @@ export const updateTenant = onCall(async (req) => {
   if (typeof techEditAvailability === 'boolean') patch.techEditAvailability = techEditAvailability;
   // Idioma de la empresa: lo fija el admin y aplica a todos los usuarios del tenant.
   if (language === 'es' || language === 'en') patch.language = language;
+  // White-label: solo el superadmin habilita/deshabilita la personalización de marca.
+  if (isSuper && typeof whiteLabel === 'boolean') patch.whiteLabel = whiteLabel;
   await ref.set(patch, { merge: true });
+  if (patch.branding) invalidateBranding(tenantId); // refresca el branding de los correos
   return { ok: true };
 });
 
@@ -115,6 +125,20 @@ export const createTenantAdmin = onCall(async (req) => {
     updatedAt: ts,
   });
   return { uid: userRecord.uid, password: pass };
+});
+
+/** Superadmin edita el nombre de un admin de cualquier tenant. */
+export const updateTenantAdmin = onCall(async (req) => {
+  assertSuperadmin(req);
+  const { uid, name } = req.data || {};
+  if (!uid || !name?.trim()) throw new HttpsError('invalid-argument', 'uid y name son requeridos.');
+  const snap = await db().collection('users').doc(String(uid)).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Usuario no encontrado.');
+  if ((snap.data() as any).role !== 'admin') throw new HttpsError('failed-precondition', 'Solo se puede editar a administradores.');
+  const clean = String(name).trim().slice(0, 80);
+  await admin.auth().updateUser(String(uid), { displayName: clean });
+  await db().collection('users').doc(String(uid)).set({ name: clean, initials: initialsOf(clean), updatedAt: nowCR() }, { merge: true });
+  return { ok: true };
 });
 
 /* ------------------------- MCP API keys ------------------------- */

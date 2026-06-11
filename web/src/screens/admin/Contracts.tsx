@@ -80,7 +80,7 @@ export default function Contracts({ ctx }: { ctx: AppCtx }) {
                   </td>
                   <td>
                     <span className="badge">
-                      <Icon name="wrench" size={12} />
+                      <Icon name="cpu" size={12} />
                       {counts.get(c.id) || 0}
                     </span>
                   </td>

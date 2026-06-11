@@ -163,7 +163,7 @@ export default function Inventory({ ctx }: { ctx: AppCtx }) {
                   {rows.length === 0 ? (
                     <tr>
                       <td colSpan={6}>
-                        <EmptyState icon="building" title={t('inventory.emptyTitle')} sub={t('inventory.emptySub')} />
+                        <EmptyState icon="box" title={t('inventory.emptyTitle')} sub={t('inventory.emptySub')} />
                       </td>
                     </tr>
                   ) : (

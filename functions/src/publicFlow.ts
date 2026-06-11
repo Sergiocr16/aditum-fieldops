@@ -17,7 +17,7 @@ import {
   TimeRange,
 } from './shared';
 import { tcol, resolvePublicToken, createPublicToken, invalidatePublicToken } from './tenant';
-import { SMTP_USER, SMTP_PASS, sendMail, layout } from './notifications';
+import { SMTP_USER, SMTP_PASS, sendMail, layout, getBranding, publicBranding, type EmailBranding } from './notifications';
 import { getSettings } from './scheduler';
 
 const db = () => admin.firestore();
@@ -43,7 +43,7 @@ function soAsTicket(so: any) {
   };
 }
 
-export function noticeTpl(so: any, confirmUrl: string, rescheduleUrl: string) {
+export function noticeTpl(so: any, confirmUrl: string, rescheduleUrl: string, branding?: EmailBranding) {
   const extra = `
     <div style="margin-top:16px;display:flex;gap:10px">
       <a href="${encodeURI(confirmUrl)}" style="display:inline-block;background:#1d7a3f;color:#fff;text-decoration:none;font-weight:600;font-size:14px;padding:11px 18px;border-radius:10px">Confirmar la fecha</a>
@@ -58,29 +58,31 @@ export function noticeTpl(so: any, confirmUrl: string, rescheduleUrl: string) {
       extraHtml: extra,
       buttonUrl: confirmUrl,
       buttonLabel: 'Confirmar la fecha',
+      branding,
     }),
   };
 }
 
-export function reminderTpl(so: any) {
+export function reminderTpl(so: any, branding?: EmailBranding) {
   return {
     subject: `Recordatorio: visita de mantenimiento hoy — ${so.num}`,
     html: layout({
       heading: 'Recordatorio de visita',
       intro: `Hoy <b>${so.scheduledDate}</b> a las <b>${so.scheduledTime || '08:00'}</b> está programada la visita de mantenimiento.`,
       ticket: soAsTicket(so),
+      branding,
     }),
   };
 }
 
-export function soTechTpl(so: any, heading: string, intro: string) {
+export function soTechTpl(so: any, heading: string, intro: string, branding?: EmailBranding) {
   return {
     subject: `${heading} — ${so.num} — ${so.scheduledDate}`,
-    html: layout({ heading, intro, ticket: soAsTicket(so) }),
+    html: layout({ heading, intro, ticket: soAsTicket(so), branding }),
   };
 }
 
-export function reportTpl(so: any, url: string) {
+export function reportTpl(so: any, url: string, branding?: EmailBranding) {
   return {
     subject: `Reporte de servicio — ${so.num}`,
     html: layout({
@@ -89,6 +91,7 @@ export function reportTpl(so: any, url: string) {
       ticket: soAsTicket(so),
       buttonUrl: url,
       buttonLabel: 'Ver el reporte',
+      branding,
     }),
   };
 }
@@ -102,6 +105,7 @@ export async function sendNotices(tid: string, today: string): Promise<{ sent: n
     .get();
   let sent = 0;
   let failed = 0;
+  const brand = await getBranding(tid);
   for (const doc of snap.docs) {
     const so = { id: doc.id, ...(doc.data() as any) };
     if (so.skipNotice) continue;
@@ -112,7 +116,7 @@ export async function sendNotices(tid: string, today: string): Promise<{ sent: n
       const expiresAt = so.scheduledDate + ' 23:59';
       const confirm = await createPublicToken({ tenantId: tid, purpose: 'so_confirm', targetId: doc.id, singleUse: true, expiresAt });
       const reschedule = await createPublicToken({ tenantId: tid, purpose: 'so_reschedule', targetId: doc.id, singleUse: true, expiresAt });
-      const m = noticeTpl(so, `${PUBLIC_BASE}/confirm/${confirm}`, `${PUBLIC_BASE}/reschedule/${reschedule}`);
+      const m = noticeTpl(so, `${PUBLIC_BASE}/confirm/${confirm}`, `${PUBLIC_BASE}/reschedule/${reschedule}`, brand);
       await sendMail(tid, email, m.subject, m.html); // si falla, queda PROGRAMADA y reintenta mañana
       await doc.ref.set(
         {
@@ -142,10 +146,11 @@ export async function sendReminders(tid: string, today: string): Promise<{ sent:
     .where('scheduledDate', '==', today)
     .get();
   let sent = 0;
+  const brand = await getBranding(tid);
   for (const doc of snap.docs) {
     const so = { id: doc.id, ...(doc.data() as any) };
     if (so.notify?.reminderSentAt) continue;
-    const m = reminderTpl(so);
+    const m = reminderTpl(so, brand);
     try {
       if (so.client?.email) await sendMail(tid, so.client.email, m.subject, m.html);
       if (so.techId) {
@@ -256,6 +261,7 @@ export const getPublicServiceOrder = onCall(async (req) => {
       // permite saltar de "confirmar" a "reagendar" sin volver al correo
       ...(purpose === 'so_confirm' ? { rescheduleToken: so.notify?.tokens?.reschedule || null } : {}),
     },
+    branding: await publicBranding(tk.tenantId),
   };
 });
 
@@ -404,5 +410,6 @@ export const getPublicServiceReport = onCall(async (req) => {
       // Cédula enmascarada en el reporte público (PII): solo se muestran los últimos 4.
       signature: so.signature ? { name: so.signature.name, idNumber: maskId(so.signature.idNumber), url: so.signature.url, at: so.signature.at } : null,
     },
+    branding: await publicBranding(tk.tenantId),
   };
 });

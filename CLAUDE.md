@@ -89,6 +89,9 @@ Estados de ticket: pendiente, asignado, en_proceso, listo_revision, aprobado, re
   envía correos en asignación, listo-para-revisión (→ `ADMIN_NOTIFY_EMAIL`), rechazo y aprobación.
   Secrets `SMTP_USER`/`SMTP_PASS`. Remitente `SMTP_FROM` (service@aditumcr.com).
 - Compartir reporte: callable `sharePublicLink` (admin) envía el link público por correo (con CC).
+- Recuperar contraseña (self-service): enlace en el login → callable `requestPasswordReset`
+  (anti-enumeración, correo branded del tenant) → página propia `/reset?oobCode=...`
+  (`screens/public/PublicReset.tsx`). No usa la pantalla genérica de Firebase.
 - Inventario: el técnico reporta `materials` en el ticket; el stock se rebaja **solo al aprobar**, dentro
   de `onTicketWritten` (transacción idempotente con flag `materialsApplied`) y crea `inventoryMovements`.
   Tools MCP: `inventory_list/low_stock/upsert/adjust/delete/movements`. El consumo NO va al link público.
@@ -97,7 +100,11 @@ Estados de ticket: pendiente, asignado, en_proceso, listo_revision, aprobado, re
 
 Ver `.claude/rules/`. En resumen:
 - **UI** (`ui-design-system.md`): reutiliza tokens/clases y componentes de `web/src/components/ui.tsx`.
-  Paleta navy/dorado. **NUNCA teal.**
+  Paleta navy/dorado. **NUNCA teal.** Modales: ancho escalado por el `Modal`. Flujos con navegación
+  propia (ej. *Tipos de equipo*) van como **pantalla**, no como modal.
+- **Login** (`login.md`): pantalla de acceso a medida (split 40% form / 60% banner-carrusel en desktop;
+  card sobre carrusel a pantalla completa en móvil; breakpoint 860px). **Léela antes de tocar
+  `Login.tsx`** o las clases `.login-*`.
 - **i18n** (`i18n.md`): toda cadena nueva va en `web/src/i18n/locales/es.json` **y** `en.json`. Sin texto fijo.
 - **Firebase/Seguridad** (`firebase.md`, `security.md`): roles validados en Functions Y en
   `firestore.rules`/`storage.rules`. Tokens públicos aleatorios. La vista pública nunca expone datos

@@ -7,7 +7,9 @@ service cloud.firestore {
     function roleIs(r)     { return signedIn() && request.auth.token.role == r; }
     function isSuper()     { return roleIs('superadmin'); }
     function inTenant(tid) { return signedIn() && request.auth.token.tenantId == tid; }
-    function hasRole(tid, r) { return inTenant(tid) && request.auth.token.role == r; }
+    // Multi-rol: además del `role` (string) legacy, acepta el claim `roles` (lista).
+    // Se verifica la existencia de la clave antes de acceder (usuarios sin `roles` no fallan).
+    function hasRole(tid, r) { return inTenant(tid) && (request.auth.token.role == r || ('roles' in request.auth.token && request.auth.token.roles is list && (r in request.auth.token.roles))); }
     function isAdmin(tid)  { return isSuper() || hasRole(tid, 'admin'); }
     function isCoord(tid)  { return hasRole(tid, 'coordinador'); }
     function isFact(tid)   { return hasRole(tid, 'facturacion'); }
