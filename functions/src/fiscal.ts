@@ -214,17 +214,47 @@ async function buildLinesFromInvoice(tenantId: string, inv: any): Promise<Fiscal
     const ct = it.chargeTypeId ? ctMap.get(it.chargeTypeId) : null;
     if (!ct) throw new HttpsError('failed-precondition', `El ítem ${it.soNum || it.id} no tiene tipo de cargo.`);
     if (ct.issuesDocument === false) continue; // no emite documento
+    if (!ct.cabysCode) throw new HttpsError('failed-precondition', `El tipo de cargo del ítem ${it.soNum || it.id} no tiene código CABYS.`);
     const amount = Number(it.amount);
     if (!amount || amount <= 0) throw new HttpsError('failed-precondition', `El ítem ${it.soNum || it.id} no tiene monto.`);
     lines.push({
-      cabys: ct.cabysCode || undefined,
-      prodServCode: ct.code || undefined,
+      cabys: ct.cabysCode,
+      prodServCode: ct.code || ct.cabysCode, // código comercial: nunca vacío
       description: it.description || it.equipmentSummary || it.soNum || 'Servicio',
       amount,
       emitIva: ct.emitIva !== false, // ivaIncluded por defecto true (monto IVA-incluido)
     });
   }
   return lines;
+}
+
+/** Valida que el emisor tenga código de actividad (Hacienda lo exige). Acepta enteros y
+    decimales del catálogo (p.ej. "8110.0"); GTI lo envía como número. */
+function assertEmisorReady(cfg: GtiConfig) {
+  const n = Number(String(cfg.activityCode || '').trim());
+  if (!cfg.activityCode || !isFinite(n) || n <= 0) {
+    throw new HttpsError('failed-precondition', 'Configurá un código de actividad del emisor en Configuración FE → Conexión GTI.');
+  }
+}
+
+/** Marca como facturados los ítems de origen (y su OT/OS). Idempotente. Solo se llama al EMITIR con éxito. */
+async function markItemsBilled(tenantId: string, itemIds: string[], invoiceId: string, invoiceNum: string) {
+  const ids = (itemIds || []).map(String).filter(Boolean);
+  if (!ids.length) return;
+  const at = nowCR();
+  await db().runTransaction(async (tx) => {
+    const itemSnaps = await Promise.all(ids.map((id) => tx.get(tcol(tenantId, 'invoiceItems').doc(id))));
+    const soSnaps = await Promise.all(itemSnaps.map((s) => { const d = s.data() as any; return d?.serviceOrderId ? tx.get(tcol(tenantId, 'serviceOrders').doc(d.serviceOrderId)) : Promise.resolve(null); }));
+    const tkSnaps = await Promise.all(itemSnaps.map((s) => { const d = s.data() as any; return d?.ticketId ? tx.get(tcol(tenantId, 'tickets').doc(d.ticketId)) : Promise.resolve(null); }));
+    itemSnaps.forEach((s, i) => {
+      if (!s.exists || (s.data() as any).status === 'facturado') return;
+      tx.update(s.ref, { status: 'facturado', invoiceId, invoiceNum, invoicedAt: at });
+      const so = soSnaps[i];
+      if (so && so.exists) { const sod = so.data() as any; tx.update(so.ref, { status: 'FACTURADA', history: [...(sod.history || []), { status: 'FACTURADA', at, by: 'Admin', note: invoiceNum }] }); }
+      const tk = tkSnaps[i];
+      if (tk && tk.exists) tx.update(tk.ref, { invoiced: true, invoicedAt: at, invoiceNum });
+    });
+  });
 }
 
 /** Emite una factura ya creada (TipoDoc=1): receptor + líneas → payload → GTI → persiste el resultado. */
@@ -246,7 +276,11 @@ async function sendInvoiceDoc(tenantId: string, invRef: FirebaseFirestore.Docume
   }
   const totals = documentTotals(lines);
   const { patch, ok, detail } = processCargaResponse(result);
-  await invRef.set({ ...patch, currency, subtotal: totals.subtotal, tax: totals.tax, total: totals.total, emittedAt: nowCR(), payloadSent: payload }, { merge: true });
+  await invRef.set({ ...patch, ...(ok ? { status: 'facturada' } : {}), currency, subtotal: totals.subtotal, tax: totals.tax, total: totals.total, emittedAt: nowCR(), payloadSent: payload }, { merge: true });
+  // Solo al EMITIR con éxito se marcan facturados los ítems de origen (si los hay).
+  if (ok && Array.isArray(inv.itemIds) && inv.itemIds.length) {
+    try { await markItemsBilled(tenantId, inv.itemIds, invRef.id, inv.num); } catch (e) { logger.error('markItemsBilled', e as Error); }
+  }
   return { ok, detail, patch };
 }
 
@@ -257,6 +291,7 @@ export const emitElectronicInvoice = onCall(async (req) => {
 
   const loaded = await loadGtiConfig(ctx.tenantId);
   if (!loaded || !loaded.enabled) throw new HttpsError('failed-precondition', 'La facturación electrónica GTI no está habilitada.');
+  assertEmisorReady(loaded.cfg);
 
   const invRef = tcol(ctx.tenantId, 'invoices').doc(invoiceId);
   const invSnap = await invRef.get();
@@ -280,6 +315,7 @@ export const createManualInvoice = onCall(async (req) => {
 
   const loaded = await loadGtiConfig(ctx.tenantId);
   if (!loaded || !loaded.enabled) throw new HttpsError('failed-precondition', 'La facturación electrónica GTI no está habilitada.');
+  assertEmisorReady(loaded.cfg);
 
   const clientSnap = await tcol(ctx.tenantId, 'clients').doc(String(receptorId)).get();
   if (!clientSnap.exists) throw new HttpsError('not-found', 'Receptor no encontrado.');
@@ -297,12 +333,14 @@ export const createManualInvoice = onCall(async (req) => {
     if (!l.description || !String(l.description).trim()) throw new HttpsError('invalid-argument', 'Cada línea necesita descripción.');
     if (!amount || amount <= 0) throw new HttpsError('invalid-argument', 'Cada línea necesita un monto mayor a cero.');
     const ct = l.chargeTypeId ? ctMap.get(l.chargeTypeId) : null;
+    if (!ct) throw new HttpsError('invalid-argument', 'Cada línea necesita un tipo de cargo (define el CABYS).');
+    if (!ct.cabysCode) throw new HttpsError('failed-precondition', `El tipo de cargo "${ct.name}" no tiene código CABYS; configuralo en Tipos de cargo.`);
     return {
       description: String(l.description).trim().slice(0, 200),
       chargeTypeId: l.chargeTypeId || null,
-      cabys: ct?.cabysCode || null,
-      prodServCode: ct?.code || null,
-      emitIva: ct ? ct.emitIva !== false : true,
+      cabys: ct.cabysCode,
+      prodServCode: ct.code || ct.cabysCode, // código comercial: nunca vacío
+      emitIva: ct.emitIva !== false,
       amount,
       ivaIncluded: false, // monto base: el IVA se suma encima
     };
@@ -316,15 +354,12 @@ export const createManualInvoice = onCall(async (req) => {
   const counterRef = tcol(ctx.tenantId, 'counters').doc('invoices');
   const at = nowCR();
   const num = await db().runTransaction(async (tx) => {
-    // Lecturas primero (counter + ítems de origen + sus OT/OS).
     const cs = await tx.get(counterRef);
-    const itemSnaps = await Promise.all(srcIds.map((id) => tx.get(tcol(ctx.tenantId, 'invoiceItems').doc(id))));
-    const soSnaps = await Promise.all(itemSnaps.map((s) => { const d = s.data() as any; return d?.serviceOrderId ? tx.get(tcol(ctx.tenantId, 'serviceOrders').doc(d.serviceOrderId)) : Promise.resolve(null); }));
-    const tkSnaps = await Promise.all(itemSnaps.map((s) => { const d = s.data() as any; return d?.ticketId ? tx.get(tcol(ctx.tenantId, 'tickets').doc(d.ticketId)) : Promise.resolve(null); }));
-
     const next = (cs.exists ? (cs.data() as any).value : 1000) + 1;
     const invoiceNum = 'FC-' + next;
     tx.set(counterRef, { value: next }, { merge: true });
+    // La factura se crea, pero los ítems de origen NO se marcan facturados todavía:
+    // solo se marcan al EMITIR con éxito (ver markItemsBilled en sendInvoiceDoc).
     tx.set(invRef, {
       num: invoiceNum,
       manual: true,
@@ -338,28 +373,17 @@ export const createManualInvoice = onCall(async (req) => {
       tax: totals.tax,
       total: totals.total,
       note: String(note || '').slice(0, 200),
-      status: 'facturada',
+      status: 'borrador',
       isElectronicBillSend: false,
       electronicBillStatus: 'PENDING',
       createdAt: at,
       createdBy: ctx.uid,
     });
-    // Marcar los ítems de origen como facturados (salen de la bandeja de pendientes).
-    itemSnaps.forEach((s, i) => {
-      if (!s.exists) return;
-      tx.update(s.ref, { status: 'facturado', invoiceId: invRef.id, invoiceNum, invoicedAt: at });
-      const so = soSnaps[i];
-      if (so && so.exists) {
-        const sod = so.data() as any;
-        tx.update(so.ref, { status: 'FACTURADA', history: [...(sod.history || []), { status: 'FACTURADA', at, by: 'Admin', note: invoiceNum }] });
-      }
-      const tk = tkSnaps[i];
-      if (tk && tk.exists) tx.update(tk.ref, { invoiced: true, invoicedAt: at, invoiceNum });
-    });
     return invoiceNum;
   });
 
-  // Emitir de una vez. Si GTI rechaza, la factura queda creada (visible) y reintentable.
+  // Emitir de una vez. Si GTI rechaza, la factura queda creada (visible) y reintentable,
+  // y los ítems de origen SIGUEN pendientes (no se marcaron).
   const fresh = await invRef.get();
   const { ok, detail, patch } = await sendInvoiceDoc(ctx.tenantId, invRef, fresh.data(), loaded.cfg);
   if (!ok) return { ok: false, invoiceId: invRef.id, num, error: detail };

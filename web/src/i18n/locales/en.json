@@ -1426,6 +1426,9 @@
     "notFound": "Invoice not found",
     "numericKey": "Numeric key",
     "credited": "Voided by credit note ({{amount}})",
-    "viewDetail": "View invoice"
+    "viewDetail": "View invoice",
+    "currency": "Currency",
+    "needChargeType": "Each line needs a charge type (it sets the CABYS)",
+    "chargeTypeHint": "The charge type sets the CABYS code and whether the line is taxed."
   }
 }

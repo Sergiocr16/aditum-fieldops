@@ -1426,6 +1426,9 @@
     "notFound": "Factura no encontrada",
     "numericKey": "Clave numérica",
     "credited": "Anulada por nota de crédito ({{amount}})",
-    "viewDetail": "Ver factura"
+    "viewDetail": "Ver factura",
+    "currency": "Moneda",
+    "needChargeType": "Cada línea necesita un tipo de cargo (define el CABYS)",
+    "chargeTypeHint": "El tipo de cargo define el código CABYS y si la línea lleva IVA."
   }
 }

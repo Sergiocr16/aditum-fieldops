@@ -171,62 +171,70 @@ function buildReceptor(r: FiscalReceptor) {
 
 function buildLine(line: FiscalLineInput) {
   const desc = limit(normalizeText(line.description), 200);
+  // Código comercial (CodProdServ): nunca vacío. Cae al CABYS si no hay código interno.
+  // Si CABYS es "surtido", Hacienda exige código comercial; un valor vacío lo rechaza.
+  const com = String(line.prodServCode || line.cabys || '').trim();
+  const commercial = com ? { CodProdServ: [com], CodTipo: [2] } : {};
+  const a = lineAmounts(line);
   if (line.emitIva) {
-    const { subTotal, tax } = lineAmounts(line);
     return compact({
       Codigo: line.cabys || undefined,
-      CodProdServ: [String(line.prodServCode || '')],
-      CodTipo: [2],
+      ...commercial,
       Cantidad: 1,
       UnidadMedida: 24,
       Descripcion: desc,
-      PrecioUnitario: subTotal,
-      Impuestos: [{ CodigoImp: 1, CodigoTarifa: 8, PorcentajeImp: 13.0, MontoImp: tax }],
+      PrecioUnitario: a.subTotal,
+      Impuestos: [{ CodigoImp: 1, CodigoTarifa: 8, PorcentajeImp: 13.0, MontoImp: a.tax }],
     });
   }
-  // No sujeto: monto exacto (sin desglose ÷1.13), tarifa 11 (0%).
-  const total = round2(line.amount);
+  // No sujeto: monto exacto, tarifa 11 (0%).
   return compact({
     Codigo: line.cabys || undefined,
-    CodProdServ: [String(line.prodServCode || '')],
-    CodTipo: [2],
+    ...commercial,
     Cantidad: 1,
     UnidadMedida: 24,
     Descripcion: desc,
-    PrecioUnitario: total,
-    MontoTotal: total,
+    PrecioUnitario: a.total,
+    MontoTotal: a.total,
     ImpuestoNeto: 0,
     Impuestos: [{ CodigoImp: 1, CodigoTarifa: 11, PorcentajeImp: 0.0, MontoImp: 0 }],
   });
 }
 
+/** CABYS que empieza con 9 = servicio; el resto = bien/mercancía (clasificación de Hacienda). */
+function isServiceCabys(cabys?: string): boolean {
+  return String(cabys || '').trim().startsWith('9');
+}
+
 function buildTotals(lines: FiscalLineInput[]) {
   let totalServGravado = 0;
-  let totalGravado = 0;
+  let totalMercaGravada = 0;
   let totalServNoSujeto = 0;
   let totalNoSujeto = 0;
   let totalImpuesto = 0;
   let totalVenta = 0;        // neto: subtotal (gravado) o total (no sujeto)
   let totalComprobante = 0;  // bruto con IVA
   for (const line of lines) {
+    const service = isServiceCabys(line.cabys);
     if (line.emitIva) {
       const { subTotal, tax, total } = lineAmounts(line);
-      totalServGravado += subTotal;
-      totalGravado += subTotal;
+      if (service) totalServGravado += subTotal; else totalMercaGravada += subTotal;
       totalImpuesto += tax;
       totalVenta += subTotal;
       totalComprobante += total;
     } else {
       const total = round2(line.amount);
-      totalServNoSujeto += total;
+      if (service) totalServNoSujeto += total;
       totalNoSujeto += total;
       totalVenta += total;
       totalComprobante += total;
     }
   }
+  const totalGravado = round2(totalServGravado + totalMercaGravada);
   return compact({
     TotalServGravado: totalServGravado ? round2(totalServGravado) : undefined,
-    TotalGravado: totalGravado ? round2(totalGravado) : undefined,
+    TotalMercaGravada: totalMercaGravada ? round2(totalMercaGravada) : undefined,
+    TotalGravado: totalGravado || undefined,
     TotalServNoSujeto: totalServNoSujeto ? round2(totalServNoSujeto) : undefined,
     TotalNoSujeto: totalNoSujeto ? round2(totalNoSujeto) : undefined,
     TotalVenta: round2(totalVenta),
@@ -303,7 +311,7 @@ async function postJson(url: string, body: any, extraHeaders?: Record<string, st
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(extraHeaders || {}) },
-      body: JSON.stringify(body ?? {}),
+      body: typeof body === 'string' ? body : JSON.stringify(body ?? {}),
       signal: ctrl.signal,
     });
     const text = await res.text();
@@ -327,10 +335,13 @@ function creds(cfg: GtiConfig): string {
   return p.toString();
 }
 
-/** Carga un documento (factura/NC). Devuelve la respuesta cruda de GTI (ResponseDTO). */
+/** Carga un documento (factura/NC). Devuelve la respuesta cruda de GTI (ResponseDTO).
+    `CodigoActividad` se fuerza a Double (p.ej. 8110.0): GTI lo valida como decimal,
+    igual que aditum-jh; mandarlo como entero (8110) provoca "CodigoActividad no válido". */
 export async function cargarDocumento(cfg: GtiConfig, payload: any): Promise<HttpResult> {
   const url = `${baseUrl(cfg)}ApiCargaFactura/api/Documentos/CargarDocumento?${creds(cfg)}`;
-  return postJson(url, payload);
+  const raw = JSON.stringify(payload).replace(/("CodigoActividad":)(-?\d+)(?=[,}])/g, '$1$2.0');
+  return postJson(url, raw);
 }
 
 /** Consulta el estado del documento ante Hacienda por consecutivo. */

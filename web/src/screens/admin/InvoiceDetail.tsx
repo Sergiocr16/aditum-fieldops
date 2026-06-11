@@ -1,16 +1,16 @@
 /* © 2026 Aditum — Aditum FieldOps — Detalle de factura (estilo factura) + acciones GTI */
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { onSnapshot, getDoc } from 'firebase/firestore';
+import { onSnapshot, getDoc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../lib/firebase';
 import { useTenant } from '../../lib/tenant';
 import { useClients } from '../../lib/clients';
 import { useChargeTypes } from '../../lib/chargeTypes';
-import { Icon, Button, Field, Input, Modal, toast } from '../../components/ui';
+import { Icon, Button, Field, Input, Select, Modal, toast } from '../../components/ui';
 import { PageHeader } from './AdminShell';
 import { identLabel } from './Clients';
-import { formatMoney, lineCalc, fiscalTone } from '../../lib/fiscal';
+import { formatMoney, lineCalc, fiscalTone, FISCAL_CURRENCIES } from '../../lib/fiscal';
 import type { AppCtx } from '../../lib/ctx';
 import type { Invoice } from '../../lib/types';
 
@@ -116,6 +116,13 @@ export default function InvoiceDetail({ ctx, id }: { ctx: AppCtx; id: string }) 
         back={() => ctx.go('billing')}
         action={
           <>
+            {!sent && (
+              <div style={{ width: 110 }}>
+                <Select value={currency} onChange={(e: any) => updateDoc(tdoc('invoices', inv.id), { currency: e.target.value }).catch(() => {})}>
+                  {FISCAL_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </Select>
+              </div>
+            )}
             {!sent && inv.receptorId && <Button variant="gold" icon="send" disabled={acting} onClick={emit}>{fiscalTone(inv.electronicBillStatus) === 'err' ? t('billing.retry') : t('billing.emit')}</Button>}
             {sent && <Button variant="ghost" icon="refresh" disabled={acting} onClick={checkStatus}>{t('billing.checkStatus')}</Button>}
             {sent && <Button variant="ghost" icon="mail" disabled={acting} onClick={resend}>{t('billing.resend')}</Button>}

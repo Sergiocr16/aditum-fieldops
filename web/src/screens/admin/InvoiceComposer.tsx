@@ -65,13 +65,16 @@ export default function InvoiceComposer({ ctx, itemIds }: { ctx: AppCtx; itemIds
   const addLine = () => setLines((ls) => [...ls, emptyLine()]);
   const removeLine = (i: number) => setLines((ls) => (ls.length > 1 ? ls.filter((_, idx) => idx !== i) : ls));
 
-  const valid = receptorId && lines.some((l) => l.description.trim() && Number(l.amount) > 0);
+  const isStarted = (l: LineDraft) => !!(l.description.trim() || Number(l.amount) > 0 || l.chargeTypeId);
+  const isComplete = (l: LineDraft) => !!(l.description.trim() && Number(l.amount) > 0 && l.chargeTypeId);
+  const valid = !!receptorId && lines.some(isComplete) && lines.filter(isStarted).every(isComplete);
 
   const submit = async () => {
     if (!receptorId) return toast(t('invoice.needReceptor'), 'error');
+    if (lines.filter(isStarted).some((l) => !l.chargeTypeId)) return toast(t('invoice.needChargeType'), 'error');
     const payloadLines = lines
-      .filter((l) => l.description.trim() && Number(l.amount) > 0)
-      .map((l) => ({ description: l.description.trim(), chargeTypeId: l.chargeTypeId || null, amount: Number(l.amount) }));
+      .filter(isComplete)
+      .map((l) => ({ description: l.description.trim(), chargeTypeId: l.chargeTypeId, amount: Number(l.amount) }));
     if (!payloadLines.length) return toast(t('invoice.needLine'), 'error');
     setBusy(true);
     try {
@@ -108,6 +111,7 @@ export default function InvoiceComposer({ ctx, itemIds }: { ctx: AppCtx; itemIds
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', color: 'var(--gold-600)' }}>{t('invoice.docType')}</div>
             <div style={{ fontSize: 13, color: 'var(--text-3)', margin: '2px 0 8px' }}>{t('invoice.draft')}</div>
+            <div className="section-label" style={{ marginBottom: 4 }}>{t('invoice.currency')}</div>
             <div style={{ width: 120, marginLeft: 'auto' }}>
               <Select value={currency} onChange={(e: any) => setCurrency(e.target.value)}>
                 {FISCAL_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -177,8 +181,9 @@ export default function InvoiceComposer({ ctx, itemIds }: { ctx: AppCtx; itemIds
             </tbody>
           </table>
         </div>
-        <div style={{ marginTop: 10 }}>
+        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
           <Button variant="ghost" icon="plus" onClick={addLine}>{t('invoice.addLine')}</Button>
+          <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{t('invoice.chargeTypeHint')}</span>
         </div>
 
         {/* Totales */}
