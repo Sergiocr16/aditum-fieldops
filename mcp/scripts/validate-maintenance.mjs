@@ -209,6 +209,20 @@ check(!consAgain.ok, 'no reconsolida un ítem ya facturado');
 const csv = await call('export_invoice_csv', {});
 check(csv.ok && csv.count >= 1 && csv.csv.includes(so.num), 'export_invoice_csv genera CSV con el ítem');
 
+console.log('\n== 15. orden de trabajo con visitas (varios días) ==');
+const ptk = await call('create_ticket', { title: 'Pintura fachada', client: 'Condominio Vista', technician: 'Tecnico', checklist: ['Lijar', 'Primera mano'] });
+const v1 = await call('add_ticket_visit', { idOrNum: ptk.num, note: 'Día 1: lijado', date: '2026-09-01', hours: 6 });
+check(v1.ok && v1.visits === 1 && !!v1.visitId, `add_ticket_visit día 1 (${ptk.num})`);
+const v2 = await call('add_ticket_visit', { idOrNum: ptk.num, note: 'Día 2: primera mano' });
+check(v2.ok && v2.visits === 2 && v2.num === ptk.num, 'add_ticket_visit día 2 en la MISMA orden');
+const gotTk = await call('get_ticket', { idOrNum: ptk.num });
+check((gotTk.visits || []).length === 2, 'la orden tiene 2 visitas (una sola orden)');
+check(gotTk.visits[0].note.includes('Día 1') && gotTk.visits[1].note.includes('Día 2'), 'cada visita guarda lo que se hizo ese día');
+check(gotTk.visits[0].hours === 6, 'guarda horas por visita');
+check(gotTk.status === 'en_proceso', 'la orden queda en_proceso (sigue abierta entre días)');
+check((gotTk.checklist || []).length === 2, 'checklist único de la orden (no se duplica por día)');
+check(gotTk.continuationOf === undefined && gotTk.jobGroupId === undefined, 'no hay órdenes enlazadas: es una sola');
+
 for (const uid of createdUids) {
   await admin.auth().deleteUser(uid).catch(() => {});
   await db.collection('users').doc(uid).delete().catch(() => {});

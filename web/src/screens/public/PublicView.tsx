@@ -4,7 +4,8 @@ import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../lib/firebase';
-import { Logo, BrandLogo, Icon, StatusBadge, Lightbox, VideoPlayer, LangSwitcher } from '../../components/ui';
+import { Logo, BrandLogo, Icon, Lightbox, VideoPlayer, LangSwitcher } from '../../components/ui';
+import { VisitBar } from '../../components/visits';
 import { brandVars } from '../../lib/branding';
 import type { Evidence } from '../../lib/types';
 
@@ -14,11 +15,10 @@ function PublicHeader({ ticket, logoUrl }: any) {
   return (
     <div style={{ background: 'var(--navy-900)', color: '#fff' }}>
       <div style={{ maxWidth: 880, margin: '0 auto', padding: '18px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-        <BrandLogo logoUrl={logoUrl} variant="dark" height={32} withLockup lockupColor="#fff" dark />
+        <BrandLogo logoUrl={logoUrl} variant="dark" height={32} withLockup={false} dark />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <LangSwitcher dark />
           <span className="mono" style={{ fontSize: 13, color: 'rgba(255,255,255,.7)', background: 'rgba(255,255,255,.1)', padding: '5px 11px', borderRadius: 7 }}>{ticket.num}</span>
-          <StatusBadge status={ticket.status} />
         </div>
       </div>
     </div>
@@ -53,7 +53,7 @@ export function PublicError({ type }: { type: ErrType }) {
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
       <div style={{ background: 'var(--navy-900)', padding: '18px 24px' }}>
         <div style={{ maxWidth: 880, margin: '0 auto' }}>
-          <Logo variant="dark" height={30} withLockup lockupColor="#fff" dark />
+          <Logo variant="dark" height={30} withLockup={false} dark />
         </div>
       </div>
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -80,6 +80,7 @@ export default function PublicView() {
   const [err, setErr] = useState<ErrType | null>(null);
   const [loading, setLoading] = useState(true);
   const [lb, setLb] = useState<number | null>(null);
+  const [vOpen, setVOpen] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -115,6 +116,42 @@ export default function PublicView() {
   if (err || !tk) return <PublicError type={err || '404'} />;
 
   const images: Evidence[] = tk.evidence || [];
+  const lbImages = images.filter((e) => e.type !== 'pdf');
+  const tvisits: any[] = Array.isArray(tk.visits) ? tk.visits : [];
+  const lastVisitId = tvisits.length ? tvisits[tvisits.length - 1].id : '';
+  const vIsOpen = (vid: string) => (vid in vOpen ? vOpen[vid] : vid === lastVisitId);
+  const vToggle = (vid: string) => setVOpen((p) => ({ ...p, [vid]: !vIsOpen(vid) }));
+  const renderMedia = (ev: any, key: any) =>
+    ev.type === 'video' ? (
+      <div key={key}>
+        <VideoPlayer src={ev.file} label={ev.desc} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 7, fontSize: 12.5 }}>
+          <span style={{ color: 'var(--text)', fontWeight: 500 }}>{ev.desc}</span>
+          <span className="mono" style={{ color: 'var(--text-3)' }}>{ev.date}</span>
+        </div>
+      </div>
+    ) : ev.type === 'pdf' ? (
+      <a key={key} href={ev.file} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12, border: '1px solid var(--border)', borderRadius: 12, padding: '13px 15px', textDecoration: 'none', color: 'var(--text)', background: '#fff' }}>
+        <span style={{ width: 38, height: 38, borderRadius: 9, background: 'var(--st-rech-bg)', color: 'var(--st-rech-fg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
+          <Icon name="file" size={18} />
+        </span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>{ev.name || ev.desc}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-3)' }}>PDF</div>
+        </div>
+        <Icon name="download" size={18} style={{ color: 'var(--text-3)' }} />
+      </a>
+    ) : (
+      <div key={key}>
+        <button onClick={() => setLb(lbImages.indexOf(ev))} style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', padding: 0, cursor: 'pointer', display: 'block', width: '100%', background: '#08283d' }}>
+          <img src={ev.file} style={{ width: '100%', display: 'block' }} />
+        </button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 7, fontSize: 12.5 }}>
+          <span style={{ color: 'var(--text)', fontWeight: 500 }}>{ev.desc}</span>
+          <span className="mono" style={{ color: 'var(--text-3)' }}>{ev.date}</span>
+        </div>
+      </div>
+    );
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', ...brandVars(branding?.primaryColor, branding?.accentColor) } as React.CSSProperties}>
@@ -159,6 +196,35 @@ export default function PublicView() {
           </PSection>
         )}
 
+        {tvisits.length > 0 && (
+          <PSection title={t('public.visitsLabel')}>
+            <div style={{ border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
+              {tvisits.map((v: any, idx: number) => {
+                const media = images.filter((e) => e.visitId === v.id);
+                const open = vIsOpen(v.id);
+                return (
+                  <div key={v.id} style={{ borderTop: idx > 0 ? '1px solid var(--border)' : 'none' }}>
+                    <VisitBar index={idx} dateStr={v.date} meta={v.techName} preview={v.note} count={media.length} open={open} onToggle={() => vToggle(v.id)} />
+                    {open && (
+                      <div className="fade-in" style={{ padding: '0 16px 16px' }}>
+                        {v.note && <p style={{ margin: '0 0 12px', fontSize: 14.5, lineHeight: 1.6, color: 'var(--text)', whiteSpace: 'pre-wrap' }}>{v.note}</p>}
+                        {media.length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{media.map((ev: any, i: number) => renderMedia(ev, v.id + '-' + i))}</div>}
+                        {!v.note && media.length === 0 && <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-3)' }}>{t('ticketDetail.noNote')}</p>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {images.filter((e) => !e.visitId).length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-3)', marginBottom: 8 }}>{t('public.otherEvidence')}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{images.filter((e) => !e.visitId).map((ev: any, i: number) => renderMedia(ev, 'u' + i))}</div>
+              </div>
+            )}
+          </PSection>
+        )}
+
         <PSection title={t('public.checklistDone', { done: (tk.checklist || []).filter((c: any) => c.done).length, total: (tk.checklist || []).length })}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {(tk.checklist || []).map((c: any, i: number) => (
@@ -175,41 +241,10 @@ export default function PublicView() {
           </div>
         </PSection>
 
-        {images.length > 0 && (
+        {(!tk.visits || tk.visits.length === 0) && images.length > 0 && (
           <PSection title={`${t('public.evidence')} · ${images.length}`}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              {images.map((ev, i) =>
-                ev.type === 'video' ? (
-                  <div key={i}>
-                    <VideoPlayer src={ev.file} label={ev.desc} />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 7, fontSize: 12.5 }}>
-                      <span style={{ color: 'var(--text)', fontWeight: 500 }}>{ev.desc}</span>
-                      <span className="mono" style={{ color: 'var(--text-3)' }}>{ev.date}</span>
-                    </div>
-                  </div>
-                ) : ev.type === 'pdf' ? (
-                  <a key={i} href={ev.file} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12, border: '1px solid var(--border)', borderRadius: 12, padding: '13px 15px', textDecoration: 'none', color: 'var(--text)', background: '#fff' }}>
-                    <span style={{ width: 38, height: 38, borderRadius: 9, background: 'var(--st-rech-bg)', color: 'var(--st-rech-fg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
-                      <Icon name="file" size={18} />
-                    </span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 14 }}>{ev.name || ev.desc}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-3)' }}>PDF</div>
-                    </div>
-                    <Icon name="download" size={18} style={{ color: 'var(--text-3)' }} />
-                  </a>
-                ) : (
-                  <div key={i}>
-                    <button onClick={() => setLb(i)} style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', padding: 0, cursor: 'pointer', display: 'block', width: '100%', background: '#08283d' }}>
-                      <img src={ev.file} style={{ width: '100%', display: 'block' }} />
-                    </button>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 7, fontSize: 12.5 }}>
-                      <span style={{ color: 'var(--text)', fontWeight: 500 }}>{ev.desc}</span>
-                      <span className="mono" style={{ color: 'var(--text-3)' }}>{ev.date}</span>
-                    </div>
-                  </div>
-                )
-              )}
+              {images.map((ev, i) => renderMedia(ev, i))}
             </div>
           </PSection>
         )}
@@ -230,13 +265,12 @@ export default function PublicView() {
         )}
 
         <div style={{ textAlign: 'center', paddingTop: 24, borderTop: '1px solid var(--border)', marginTop: 10 }}>
-          <Logo height={28} />
-          <p style={{ fontSize: 14, color: 'var(--navy-700)', fontWeight: 700, margin: '12px 0 4px' }}>{t('brand.developedBy')}</p>
-          <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '0 0 4px' }}>{t('public.footer')}</p>
+          <Logo height={28} withLockup={false} />
+          <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '12px 0 4px' }}>{t('public.footer')}</p>
           <p style={{ fontSize: 11.5, color: 'var(--text-3)', margin: 0 }}>{t('copyright', { year: new Date().getFullYear() })}</p>
         </div>
       </div>
-      {lb != null && <Lightbox items={images.filter((e) => e.type !== 'pdf')} index={lb} onClose={() => setLb(null)} onIndex={setLb} />}
+      {lb != null && <Lightbox items={lbImages} index={lb} onClose={() => setLb(null)} onIndex={setLb} />}
     </div>
   );
 }

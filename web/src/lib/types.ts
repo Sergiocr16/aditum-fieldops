@@ -278,6 +278,8 @@ export interface ChecklistItem {
   done: boolean;
   by?: string | null;
   at?: string | null;
+  /** Visita (día) en la que se completó (trabajos de varios días). */
+  visitId?: string | null;
 }
 
 export interface Evidence {
@@ -293,6 +295,20 @@ export interface Evidence {
   by?: string;
   date: string;
   status?: 'processing' | 'ready';
+  /** Visita (día) a la que pertenece la foto (trabajos de varios días). */
+  visitId?: string | null;
+}
+
+/** Una visita = un día de trabajo de una orden. */
+export interface Visit {
+  id: string;
+  date: string; // YYYY-MM-DD
+  techId: string | null;
+  techName: string;
+  note: string; // qué se hizo ese día
+  hours?: number | null;
+  at: string;
+  by: string;
 }
 
 export interface HistoryEntry {
@@ -435,4 +451,6 @@ export interface Ticket {
   invoicedAt?: string | null;
   invoiceNum?: string;
   invoiceNote?: string;
+  // Trabajos de varios días: una sola orden con varias visitas (un día = una visita).
+  visits?: Visit[];
 }

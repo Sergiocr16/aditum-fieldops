@@ -7,6 +7,7 @@ import { randomBytes } from 'crypto';
 import type { firestore, auth } from 'firebase-admin';
 import {
   createTicketWithNumber,
+  buildVisit,
   createContractWithNumber,
   createServiceOrderWithNumber,
   buildEquipmentDoc,
@@ -433,6 +434,42 @@ export function registerTools(server: McpServer, db: Db, tenantId: string, actor
       const t = doc.data() as any;
       await doc.ref.set({ comments: [...(t.comments || []), { type: args.type || 'general', by: BY, at: nowCR(), text: args.text }] }, { merge: true });
       return ok({ ok: true, num: t.num });
+    }
+  );
+
+  server.tool(
+    'add_ticket_visit',
+    'Registra una visita (un día de trabajo) en una orden de trabajo de varios días. La orden sigue siendo una sola (una factura, un reporte); cada visita guarda qué se hizo ese día.',
+    {
+      idOrNum: z.string().describe('Orden de trabajo (id o número AD-####)'),
+      note: z.string().describe('Qué se hizo ese día'),
+      date: z.string().optional().describe('Fecha de la visita YYYY-MM-DD (def hoy)'),
+      technician: z.string().optional().describe('Técnico (nombre/email/id); si se omite, el de la orden'),
+      hours: z.number().optional().describe('Horas trabajadas ese día'),
+    },
+    async (args) => {
+      const doc = await findTicket(args.idOrNum);
+      if (!doc) return ok({ ok: false, error: 'orden de trabajo no encontrada' });
+      const t = doc.data() as any;
+      let techId: string | null = t.techId || null;
+      let techName = '';
+      if (args.technician !== undefined) {
+        const tech = await findTechId(args.technician);
+        if (!tech.id) return ok({ ok: false, error: 'técnico no encontrado' });
+        techId = tech.id;
+        techName = tech.name || '';
+      } else if (techId) {
+        const u = await db.collection('users').doc(techId).get();
+        techName = u.exists ? (u.data() as any).name || '' : '';
+      }
+      const visit = buildVisit({ date: args.date, note: args.note, techId, techName, hours: args.hours }, BY);
+      const patch: any = { visits: [...(t.visits || []), visit] };
+      if (t.status === 'asignado' || t.status === 'pendiente') {
+        patch.status = 'en_proceso';
+        patch.history = [...(t.history || []), { status: 'en_proceso', at: nowCR(), by: BY }];
+      }
+      await doc.ref.set(patch, { merge: true });
+      return ok({ ok: true, num: t.num, visitId: visit.id, visits: patch.visits.length });
     }
   );
 

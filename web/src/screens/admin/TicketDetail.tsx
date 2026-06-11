@@ -5,10 +5,54 @@ import {
   Icon, Avatar, Button, StatusBadge, PriorityChip, EmptyState, EvidenceThumb,
   Lightbox, Timeline, SharePanel, Toggle, toast,
 } from '../../components/ui';
+import { VisitBar } from '../../components/visits';
 import { RejectModal, ApproveModal, ReassignModal } from './modals';
 import { approveTicket, rejectTicket, reassignTicket, closeTicket, addComment, generateLink, regenerateLink, toggleLink } from '../../lib/actions';
 import type { AppCtx } from '../../lib/ctx';
-import type { Comment } from '../../lib/types';
+import type { Comment, Ticket } from '../../lib/types';
+
+/** Timeline de visitas (trabajo por día) de una orden, con sus fotos por día. */
+function VisitsTimeline({ tk, onPhoto }: { tk: Ticket; onPhoto: (i: number) => void }) {
+  const { t } = useTranslation();
+  const visits = tk.visits || [];
+  const lastId = visits.length ? visits[visits.length - 1].id : '';
+  const [over, setOver] = useState<Record<string, boolean>>({});
+  if (!visits.length) return null;
+  const isOpen = (vid: string) => (vid in over ? over[vid] : vid === lastId);
+  const toggle = (vid: string) => setOver((p) => ({ ...p, [vid]: !isOpen(vid) }));
+  return (
+    <div className="card" style={{ overflow: 'hidden' }}>
+      <div style={{ padding: '13px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 9, background: 'var(--surface-2)' }}>
+        <span style={{ color: 'var(--navy-700)', display: 'flex' }}><Icon name="clock" size={17} /></span>
+        <span style={{ fontWeight: 700, fontSize: 14.5 }}>{t('ticketDetail.visitsTitle', { count: visits.length })}</span>
+      </div>
+      <div>
+        {visits.map((v, idx) => {
+          const photos = tk.evidence.filter((e) => e.visitId === v.id);
+          const open = isOpen(v.id);
+          return (
+            <div key={v.id} style={{ borderTop: idx > 0 ? '1px solid var(--border)' : 'none' }}>
+              <VisitBar index={idx} dateStr={v.date} meta={v.techName} preview={v.note} count={photos.length} open={open} onToggle={() => toggle(v.id)} />
+              {open && (
+                <div className="fade-in" style={{ padding: '0 18px 18px 73px' }}>
+                  <p style={{ margin: '0 0 12px', fontSize: 14, lineHeight: 1.55, color: 'var(--text)', whiteSpace: 'pre-wrap' }}>
+                    {v.note || <span style={{ color: 'var(--text-3)' }}>{t('common.noInfo')}</span>}
+                    {v.hours ? <span className="mono" style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-3)' }}>· {v.hours}h</span> : null}
+                  </p>
+                  {photos.length > 0 && (
+                    <div className="evidence-grid">
+                      {photos.map((ev) => { const gi = tk.evidence.indexOf(ev); return <EvidenceThumb key={ev.id} src={ev.file} type={ev.type} onClick={() => onPhoto(gi)} h={92} />; })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function InfoRow({ label, value, mono }: any) {
   return (
@@ -150,17 +194,19 @@ export default function TicketDetailAdmin({ ctx, id }: { ctx: AppCtx; id: string
             <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: 'var(--text)' }}>{tk.evidenceReq}</p>
           </Block>
 
-          <Block title={t('ticketDetail.workDone')} icon="check">
-            {tk.techNote ? (
-              <>
-                <Prose label={t('ticketDetail.whatTechDid')} text={tk.techNote} />
-                {tk.techObs && <Prose label={t('ticketDetail.techObs')} text={tk.techObs} />}
-                {tk.readyAt && <div className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>{t('ticketDetail.markedReady', { at: tk.readyAt })}</div>}
-              </>
-            ) : (
+          <VisitsTimeline tk={tk} onPhoto={setLb} />
+
+          {tk.techObs || tk.readyAt || tk.techNote ? (
+            <Block title={t('ticketDetail.workDone')} icon="check">
+              {tk.techNote && <Prose label={t('ticketDetail.whatTechDid')} text={tk.techNote} />}
+              {tk.techObs && <Prose label={t('ticketDetail.techObs')} text={tk.techObs} />}
+              {tk.readyAt && <div className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>{t('ticketDetail.markedReady', { at: tk.readyAt })}</div>}
+            </Block>
+          ) : !tk.visits || tk.visits.length === 0 ? (
+            <Block title={t('ticketDetail.workDone')} icon="check">
               <EmptyState icon="clock" title={t('ticketDetail.noReportTitle')} sub={t('ticketDetail.noReportSub')} />
-            )}
-          </Block>
+            </Block>
+          ) : null}
 
           <Block title={`${t('ticketDetail.checklist')} · ${doneCount}/${tk.checklist.length}`} icon="checkCircle">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

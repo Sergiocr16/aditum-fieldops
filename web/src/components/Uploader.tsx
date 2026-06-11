@@ -1,7 +1,7 @@
 /* © 2026 Aditum — Aditum FieldOps — Resumable evidence uploader (Firebase Storage) */
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../lib/firebase';
 import { useTenant } from '../lib/tenant';
 import { now } from '../lib/time';
@@ -15,13 +15,16 @@ const LIMITS = {
   pdf: { accept: 'application/pdf', max: 25 * 1024 * 1024 },
 };
 
+// El emulador de Storage no maneja bien las subidas resumables; en local subimos directo.
+const USE_EMULATORS = import.meta.env.VITE_USE_EMULATORS === 'true';
+
 function typeOf(file: File): EvidenceType {
   if (file.type.startsWith('video/')) return 'video';
   if (file.type === 'application/pdf') return 'pdf';
   return 'image';
 }
 
-export default function Uploader({ ticket, ctx, kind, by }: { ticket: Ticket; ctx: AppCtx; kind: 'photo' | 'video'; by: string }) {
+export default function Uploader({ ticket, ctx, kind, by, visitId }: { ticket: Ticket; ctx: AppCtx; kind: 'photo' | 'video'; by: string; visitId?: string | null }) {
   const { t } = useTranslation();
   const { tid } = useTenant();
   const isVideo = kind === 'video';
@@ -41,12 +44,45 @@ export default function Uploader({ ticket, ctx, kind, by }: { ticket: Ticket; ct
     }
     const fileId = Math.random().toString(36).slice(2) + '-' + Date.now();
     const path = `tenants/${tid}/tickets/${ticket.id}/${fileId}-${file.name.replace(/[^\w.\-]/g, '_')}`;
-    const task = uploadBytesResumable(storageRef(storage, path), file, {
-      contentType: file.type,
-      customMetadata: { ticketId: ticket.id, uploadedBy: by, evidenceId: fileId },
-    });
+    const sref = storageRef(storage, path);
+    const metadata = { contentType: file.type, customMetadata: { ticketId: ticket.id, uploadedBy: by, evidenceId: fileId } };
     setProgress(0);
     setPhase('upload');
+    // try/catch: si getDownloadURL o updateTicket fallan, mostramos el error y
+    // limpiamos el progreso en vez de dejar el spinner colgado para siempre.
+    const finalize = async () => {
+      try {
+        if (isVideo) setPhase('finalize'); // server function compresses & generates thumbnail
+        const url = await getDownloadURL(sref);
+        const entry: Evidence = {
+          id: fileId,
+          path,
+          file: url,
+          type: evType,
+          name: file.name,
+          size: file.size,
+          desc: isVideo ? t('mobile.videoUploaded') : t('mobile.photoUploaded'),
+          by,
+          date: now(),
+          status: evType === 'video' ? 'processing' : 'ready',
+          visitId: visitId ?? null,
+        };
+        await ctx.updateTicket(ticket.id, { evidence: [...ticket.evidence, entry] });
+        toast(isVideo ? t('mobile.videoUploaded') : t('mobile.photoUploaded'), 'success');
+      } catch (e: any) {
+        toast(e?.message || 'Error', 'error');
+      } finally {
+        setProgress(null);
+      }
+    };
+    if (USE_EMULATORS) {
+      // El emulador de Storage cuelga las subidas resumables (multi-chunk): se quedan en un
+      // porcentaje bajo. En local subimos en una sola request. En producción se usa resumable.
+      setPhase('finalize');
+      uploadBytes(sref, file, metadata).then(finalize).catch((err: any) => { setProgress(null); toast(err.message, 'error'); });
+      return;
+    }
+    const task = uploadBytesResumable(sref, file, metadata);
     task.on(
       'state_changed',
       (snap) => setProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
@@ -54,32 +90,7 @@ export default function Uploader({ ticket, ctx, kind, by }: { ticket: Ticket; ct
         setProgress(null);
         toast(err.message, 'error');
       },
-      async () => {
-        // try/catch: si getDownloadURL o updateTicket fallan, mostramos el error y
-        // limpiamos el progreso en vez de dejar el spinner colgado para siempre.
-        try {
-          if (isVideo) setPhase('finalize'); // server function compresses & generates thumbnail
-          const url = await getDownloadURL(task.snapshot.ref);
-          const entry: Evidence = {
-            id: fileId,
-            path,
-            file: url,
-            type: evType,
-            name: file.name,
-            size: file.size,
-            desc: isVideo ? t('mobile.videoUploaded') : t('mobile.photoUploaded'),
-            by,
-            date: now(),
-            status: evType === 'video' ? 'processing' : 'ready',
-          };
-          await ctx.updateTicket(ticket.id, { evidence: [...ticket.evidence, entry] });
-          toast(isVideo ? t('mobile.videoUploaded') : t('mobile.photoUploaded'), 'success');
-        } catch (e: any) {
-          toast(e?.message || 'Error', 'error');
-        } finally {
-          setProgress(null);
-        }
-      }
+      finalize
     );
   };
 

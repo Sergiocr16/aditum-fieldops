@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Icon, StatusBadge, PriorityChip, Field, Textarea, Input, Select, Button, Stepper, Modal, Lightbox, EvidenceThumb, toast, confirmDialog } from '../../components/ui';
+import { VisitBar } from '../../components/visits';
 import { MobileHeader } from './MobileDashboard';
 import Uploader from '../../components/Uploader';
 import { ref as storageRef, deleteObject } from 'firebase/storage';
@@ -9,9 +10,9 @@ import { storage } from '../../lib/firebase';
 import { useInventory } from '../../lib/inventory';
 import { useTenant } from '../../lib/tenant';
 import { tenantHasFeature } from '../../lib/modules';
-import { now } from '../../lib/time';
+import { now, today } from '../../lib/time';
 import type { AppCtx } from '../../lib/ctx';
-import type { MaterialUse } from '../../lib/types';
+import type { MaterialUse, Visit } from '../../lib/types';
 
 function MBlock({ icon, q, children, tone }: any) {
   const tones: any = {
@@ -35,7 +36,6 @@ function MBlock({ icon, q, children, tone }: any) {
 export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string }) {
   const { t } = useTranslation();
   const tk = ctx.db.tickets.find((x) => x.id === id);
-  const [note, setNote] = useState(tk?.techNote || '');
   const [obs, setObs] = useState(tk?.techObs || '');
   const [lb, setLb] = useState<number | null>(null);
   const [warn, setWarn] = useState('');
@@ -48,23 +48,60 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
   const [selQty, setSelQty] = useState(1);
   const [selComment, setSelComment] = useState('');
   const [confirmReady, setConfirmReady] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [newDate, setNewDate] = useState(today());
+  // Borradores de nota por visita (se persisten al salir del campo); permite editar cualquier día.
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const [vOver, setVOver] = useState<Record<string, boolean>>({});
+  const visits: Visit[] = tk?.visits || [];
+  const activeVisit = visits.length ? visits[visits.length - 1] : null;
   if (!tk) return null;
+  const lastVisitId = activeVisit?.id || '';
+  const vIsOpen = (vid: string) => (vid in vOver ? vOver[vid] : vid === lastVisitId);
+  const vToggle = (vid: string) => setVOver((p) => ({ ...p, [vid]: !vIsOpen(vid) }));
   const me = ctx.admin.name;
   const doneCount = tk.checklist.filter((c) => c.done).length;
   const allDone = doneCount === tk.checklist.length && tk.checklist.length > 0;
   const hasEvidence = tk.evidence.length > 0;
+  const noteOf = (v: Visit) => (noteDrafts[v.id] !== undefined ? noteDrafts[v.id] : v.note);
+  const hasVisitWork = visits.some((v) => (noteOf(v) || '').trim());
   const rejected = tk.status === 'rechazado';
   const rejectComment = tk.comments.filter((c) => c.type === 'rechazo').slice(-1)[0];
   const canEdit = tk.status !== 'aprobado' && tk.status !== 'cerrado' && tk.status !== 'listo_revision';
 
   const toggleCheck = (cid: string) => {
     ctx.updateTicket(id, {
-      checklist: tk.checklist.map((c) => (c.id === cid ? { ...c, done: !c.done, by: !c.done ? me : null, at: !c.done ? now() : null } : c)),
+      checklist: tk.checklist.map((c) => (c.id === cid ? { ...c, done: !c.done, by: !c.done ? me : null, at: !c.done ? now() : null, visitId: !c.done ? activeVisit?.id || null : null } : c)),
     });
   };
   const markProcess = () => {
     ctx.updateTicket(id, { status: 'en_proceso', history: [...tk.history, { status: 'en_proceso', at: now(), by: me }] });
     toast(t('mobile.inProcess'), 'success');
+  };
+  // Visitas (trabajo por día) ----------------------------------------------------
+  const addVisit = (date: string) => {
+    const v: Visit = { id: 'v' + now().replace(/[^0-9]/g, '') + '-' + Math.random().toString(36).slice(2, 7), date: date || today(), techId: ctx.admin.uid, techName: me, note: '', hours: null, at: now(), by: me };
+    const patch: any = { visits: [...visits, v] };
+    if (tk.status === 'asignado' || tk.status === 'pendiente') {
+      patch.status = 'en_proceso';
+      patch.history = [...tk.history, { status: 'en_proceso', at: now(), by: me }];
+    }
+    ctx.updateTicket(id, patch);
+    setAddOpen(false);
+  };
+  const setDraft = (vid: string, val: string) => setNoteDrafts((p) => ({ ...p, [vid]: val }));
+  const saveNote = (vid: string) => {
+    if (noteDrafts[vid] === undefined) return;
+    ctx.updateTicket(id, { visits: visits.map((v) => (v.id === vid ? { ...v, note: noteDrafts[vid] } : v)) });
+  };
+  const flushNotes = () => {
+    if (!Object.keys(noteDrafts).length) return;
+    ctx.updateTicket(id, { visits: visits.map((v) => (noteDrafts[v.id] !== undefined ? { ...v, note: noteDrafts[v.id] } : v)) });
+  };
+  const removeVisit = async (vid: string) => {
+    const okc = await confirmDialog({ title: t('mobile.removeVisit'), message: t('mobile.removeVisitConfirm'), tone: 'danger', confirmLabel: t('common.delete'), confirmIcon: 'trash' });
+    if (!okc) return;
+    ctx.updateTicket(id, { visits: visits.filter((v) => v.id !== vid), evidence: tk.evidence.filter((e) => e.visitId !== vid) });
   };
   const persistMaterials = (mats: MaterialUse[], noteVal: string) => {
     setMaterials(mats);
@@ -96,7 +133,8 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
     toast(t('mobile.evidenceRemoved'));
   };
   const requestReady = () => {
-    ctx.updateTicket(id, { techNote: note, techObs: obs, materials, materialsNote: matNote });
+    flushNotes();
+    ctx.updateTicket(id, { techObs: obs, materials, materialsNote: matNote });
     if (!allDone) {
       setWarn(t('mobile.warnChecklist'));
       return;
@@ -105,8 +143,8 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
       setWarn(t('mobile.warnEvidence'));
       return;
     }
-    if (!note.trim()) {
-      setWarn(t('mobile.warnNote'));
+    if (!hasVisitWork) {
+      setWarn(t('mobile.warnVisit'));
       return;
     }
     setWarn('');
@@ -116,7 +154,6 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
     setConfirmReady(false);
     ctx.updateTicket(id, {
       status: 'listo_revision',
-      techNote: note,
       techObs: obs,
       materials,
       materialsNote: matNote,
@@ -203,15 +240,94 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
           </div>
         </div>
 
-        <MBlock icon="check" q={t('mobile.workDone')}>
-          <Field label={t('mobile.whatYouDid')}>
-            <Textarea placeholder={t('mobile.whatYouDidPh')} value={note} onChange={(e: any) => setNote(e.target.value)} disabled={!canEdit} style={{ minHeight: 90, fontSize: 15 }} />
-          </Field>
-          <div style={{ height: 12 }} />
-          <Field label={t('mobile.techObs')} hint={t('common.optional')}>
-            <Textarea placeholder={t('mobile.techObsPh')} value={obs} onChange={(e: any) => setObs(e.target.value)} disabled={!canEdit} style={{ minHeight: 64, fontSize: 15 }} />
-          </Field>
-        </MBlock>
+        {/* Visitas: el trabajo por día (una orden de varios días = varias visitas). */}
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
+          <div style={{ padding: '13px 15px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--border)' }}>
+            <span style={{ width: 34, height: 34, borderRadius: 9, background: 'var(--navy-800)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="clock" size={18} /></span>
+            <span style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>{t('mobile.visitsTitle')}</span>
+            {visits.length > 0 && <span className="mono" style={{ fontSize: 13, color: 'var(--text-2)' }}>{visits.length}</span>}
+          </div>
+          <div>
+            {visits.length === 0 && !canEdit && <div style={{ fontSize: 13.5, color: 'var(--text-3)', padding: '14px 15px' }}>{t('mobile.noVisits')}</div>}
+            {visits.map((v, idx) => {
+              const photos = tk.evidence.filter((e) => e.visitId === v.id);
+              const open = vIsOpen(v.id);
+              return (
+                <div key={v.id} style={{ borderTop: idx > 0 ? '1px solid var(--border)' : 'none' }}>
+                  <VisitBar index={idx} dateStr={v.date} meta={v.techName} preview={noteOf(v)} count={photos.length} open={open} onToggle={() => vToggle(v.id)} />
+                  {open && (
+                    <div className="fade-in" style={{ padding: '0 14px 14px' }}>
+                      {canEdit ? (
+                        <>
+                          <Textarea placeholder={t('mobile.whatYouDidPh')} value={noteOf(v)} onChange={(e: any) => setDraft(v.id, e.target.value)} onBlur={() => saveNote(v.id)} style={{ minHeight: 76, fontSize: 15 }} />
+                          {photos.length > 0 && (
+                            <div className="m-evidence-grid" style={{ marginTop: 10 }}>
+                              {photos.map((ev) => { const gi = tk.evidence.indexOf(ev); return (
+                                <div key={ev.id} style={{ position: 'relative' }}>
+                                  <EvidenceThumb src={ev.file} type={ev.type} onClick={() => setLb(gi)} h={84} />
+                                  <button onClick={(e) => { e.stopPropagation(); removeEvidence(gi); }} aria-label="x" style={{ position: 'absolute', top: 4, right: 4, width: 24, height: 24, borderRadius: '50%', border: 'none', background: 'rgba(0,30,47,.78)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><Icon name="x" size={14} /></button>
+                                </div>
+                              ); })}
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 10 }}>
+                            <Uploader ticket={tk} ctx={ctx} kind="photo" by={me} visitId={v.id} />
+                            <Uploader ticket={tk} ctx={ctx} kind="video" by={me} visitId={v.id} />
+                          </div>
+                          <button onClick={() => removeVisit(v.id)} style={{ marginTop: 12, border: 'none', background: 'transparent', color: 'var(--st-rech-fg)', fontSize: 13, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 0 }}>
+                            <Icon name="trash" size={14} />{t('mobile.removeVisit')}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <p style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--text)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{v.note || <span style={{ color: 'var(--text-3)' }}>{t('common.noInfo')}</span>}</p>
+                          {photos.length > 0 && (
+                            <div className="m-evidence-grid">
+                              {photos.map((ev) => { const gi = tk.evidence.indexOf(ev); return <EvidenceThumb key={ev.id} src={ev.file} type={ev.type} onClick={() => setLb(gi)} h={84} />; })}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            <div style={{ padding: '13px 14px', borderTop: visits.length ? '1px solid var(--border)' : 'none', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {tk.evidence.filter((e) => !e.visitId).length > 0 && (
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-3)', marginBottom: 6 }}>{t('mobile.otherPhotos')}</div>
+                  <div className="m-evidence-grid">
+                    {tk.evidence.filter((e) => !e.visitId).map((ev) => { const gi = tk.evidence.indexOf(ev); return <EvidenceThumb key={ev.id} src={ev.file} type={ev.type} onClick={() => setLb(gi)} h={84} />; })}
+                  </div>
+                </div>
+              )}
+              {canEdit && (addOpen ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, border: '1px dashed var(--border-strong)', borderRadius: 12, padding: 12 }}>
+                  <Field label={t('mobile.fVisitDate')}>
+                    <Input type="date" value={newDate} onChange={(e: any) => setNewDate(e.target.value)} style={{ width: 180, maxWidth: '100%' }} />
+                  </Field>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Button variant="ghost" block onClick={() => setAddOpen(false)}>{t('common.cancel')}</Button>
+                    <Button variant="gold" icon="plus" block onClick={() => addVisit(newDate)}>{t('mobile.addVisitConfirm')}</Button>
+                  </div>
+                </div>
+              ) : (
+                <Button variant="ghost" icon="plus" block onClick={() => { setNewDate(today()); setAddOpen(true); }}>{visits.length === 0 ? t('mobile.addTodayWork') : t('mobile.addAnotherDay')}</Button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {(canEdit || tk.techObs) && (
+          <MBlock icon="eye" q={t('mobile.techObs')}>
+            {canEdit ? (
+              <Textarea placeholder={t('mobile.techObsPh')} value={obs} onChange={(e: any) => setObs(e.target.value)} onBlur={() => ctx.updateTicket(id, { techObs: obs })} style={{ minHeight: 64, fontSize: 15 }} />
+            ) : (
+              <p style={{ margin: 0, fontSize: 14, color: 'var(--text)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{tk.techObs}</p>
+            )}
+          </MBlock>
+        )}
 
         {showMaterials && (
         <MBlock icon="box" q={t('materials.title')}>
@@ -267,35 +383,6 @@ export default function TechTicketDetail({ ctx, id }: { ctx: AppCtx; id: string 
           {!canEdit && matNote && <p style={{ margin: '6px 0 0', fontSize: 13.5, color: 'var(--text-2)' }}>{matNote}</p>}
         </MBlock>
         )}
-
-        <MBlock icon="upload" q={t('mobile.uploadEvidence')}>
-          {tk.evidence.length > 0 && (
-            <div className="m-evidence-grid" style={{ marginBottom: 12 }}>
-              {tk.evidence.map((ev, i) => (
-                <div key={i} style={{ position: 'relative' }}>
-                  <EvidenceThumb src={ev.file} type={ev.type} onClick={() => setLb(i)} h={88} />
-                  {canEdit && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); removeEvidence(i); }}
-                      aria-label={t('mobile.removeEvidence')}
-                      style={{ position: 'absolute', top: 4, right: 4, width: 26, height: 26, borderRadius: '50%', border: 'none', background: 'rgba(0,30,47,.78)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,.3)' }}
-                    >
-                      <Icon name="x" size={15} />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          {canEdit ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <Uploader ticket={tk} ctx={ctx} kind="photo" by={me} />
-              <Uploader ticket={tk} ctx={ctx} kind="video" by={me} />
-            </div>
-          ) : (
-            <div style={{ fontSize: 13, color: 'var(--text-3)', textAlign: 'center', padding: '8px 0' }}>{t('mobile.evidenceSent')}</div>
-          )}
-        </MBlock>
 
       </div>
 

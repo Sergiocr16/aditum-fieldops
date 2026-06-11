@@ -523,6 +523,37 @@ export async function createTicketWithNumber(
   return { id: ref.id, num };
 }
 
+/* ---------------- visitas (trabajos de varios días en una sola orden) ---------------- */
+
+export interface Visit {
+  id: string;
+  date: string;          // YYYY-MM-DD del día de la visita
+  techId: string | null;
+  techName: string;
+  note: string;          // qué se hizo ese día
+  hours?: number | null; // horas trabajadas (opcional)
+  at: string;            // timestamp de registro
+  by: string;
+}
+
+/** Arma una visita (un día de trabajo de una orden). */
+export function buildVisit(
+  input: { date?: string; note?: string; techId?: string | null; techName?: string; hours?: number | null },
+  by: string
+): Visit {
+  const ts = nowCR();
+  return {
+    id: 'v' + ts.replace(/[^0-9]/g, '') + '-' + Math.random().toString(36).slice(2, 7),
+    date: input.date || ts.slice(0, 10),
+    techId: input.techId ?? null,
+    techName: input.techName || '',
+    note: (input.note || '').trim(),
+    hours: input.hours ?? null,
+    at: ts,
+    by,
+  };
+}
+
 /* ---------------- Wiki ---------------- */
 export interface NewWikiPageInput {
   title: string;

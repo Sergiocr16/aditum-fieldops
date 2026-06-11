@@ -206,6 +206,12 @@ export default function TicketsList({ ctx, onApprove, onReject, onReassign }: { 
                       <td className="mono" style={{ color: 'var(--text-2)', fontWeight: 500 }}>{tk.num}</td>
                       <td style={{ fontWeight: 600, maxWidth: 220 }}>
                         <div className="truncate">{tk.title}</div>
+                        {tk.visits && tk.visits.length > 1 && (
+                          <span title={t('ticketDetail.visitsTitle', { count: tk.visits.length })} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, marginRight: 6, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: 'var(--surface-2)', color: 'var(--navy-700)', border: '1px solid var(--border)' }}>
+                            <Icon name="clock" size={11} />
+                            {t('tickets.nVisits', { count: tk.visits.length })}
+                          </span>
+                        )}
                         {tk.requiresInvoice && (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 99, ...(tk.invoiced ? { background: 'var(--st-apro-bg)', color: 'var(--st-apro-fg)' } : { background: 'var(--gold-50)', color: 'var(--gold-600)' }) }}>
                             <Icon name={tk.invoiced ? 'checkCircle' : 'file'} size={11} />

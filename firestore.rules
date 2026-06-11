@@ -66,7 +66,7 @@ service cloud.firestore {
           // Lista blanca de campos que el técnico puede tocar; bloquea inyección
           // de materialsApplied/approval/num u otros campos arbitrarios.
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['status','checklist','evidence','history','materials','materialsNote','readyAt','techNote','techObs'])
+               .hasOnly(['status','checklist','evidence','history','materials','materialsNote','readyAt','techNote','techObs','visits'])
         );
       }
 

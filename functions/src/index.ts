@@ -156,11 +156,10 @@ export const getPublicTicket = onCall(async (req) => {
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'Not found', { reason: 'notfound' });
   const t = snap.data() as any;
-  const sh = t.share || {};
-  if (!sh.active) throw new HttpsError('permission-denied', 'Link disabled', { reason: 'disabled' });
+  if (!(t.share || {}).active) throw new HttpsError('permission-denied', 'Link disabled', { reason: 'disabled' });
 
   // record visit (best-effort)
-  ref.set({ share: { ...sh, lastVisit: nowCR() } }, { merge: true }).catch(() => {});
+  ref.set({ share: { ...(t.share || {}), lastVisit: nowCR() } }, { merge: true }).catch(() => {});
 
   let techName = '';
   if (t.techId) {
@@ -186,9 +185,11 @@ export const getPublicTicket = onCall(async (req) => {
     observations: t.observations,
     techNote: t.techNote,
     techObs: t.techObs,
-    checklist: (t.checklist || []).map((c: any) => ({ text: c.text, done: c.done, at: c.at || null })),
-    evidence: (t.evidence || []).map((e: any) => ({ file: e.file, type: e.type, desc: e.desc, date: e.date, name: e.name || null })),
+    checklist: (t.checklist || []).map((c: any) => ({ text: c.text, done: c.done, at: c.at || null, visitId: c.visitId || null })),
+    evidence: (t.evidence || []).map((e: any) => ({ file: e.file, type: e.type, desc: e.desc, date: e.date, name: e.name || null, visitId: e.visitId || null })),
     approval: t.approval || null,
+    // Trabajo de varios días: el detalle por día (qué se hizo en cada visita).
+    visits: (t.visits || []).map((v: any) => ({ id: v.id, date: v.date, techName: v.techName || '', note: v.note || '', hours: v.hours ?? null })),
   };
   return { ticket, branding: await publicBranding(tk.tenantId) };
 });
