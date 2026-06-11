@@ -44,8 +44,9 @@ Claude Code ──► MCP server (mcp/) ──► Firebase Admin SDK ──► m
 
 ## Modelo de datos (Firestore)
 
-`users`, `tickets` (con `checklist[]`, `evidence[]`, `history[]`, `comments[]`, `share{token,active,...}`),
-`counters/tickets`, `wikiCategories`, `wikiPages`. Detalle en [CLAUDE.md](./CLAUDE.md).
+`users`, `tickets` (con `checklist[]`, `evidence[]`, `history[]`, `comments[]`, `share{token,active,...}`,
+y `visits[]` para trabajos de varios días), `counters/tickets`, `wikiCategories`, `wikiPages`. Detalle en
+[CLAUDE.md](./CLAUDE.md).
 
 ## Requisitos de tooling (importante)
 
@@ -148,8 +149,14 @@ regla en [`.claude/rules/login.md`](./.claude/rules/login.md) — **léela antes
   tarjeta de credenciales copiables al crear; acción **Regenerar contraseña** por técnico
   (`resetTechnicianPassword`).
 - **Link público**: si está **activo**, el reporte es visible (el control es activar/desactivar el link).
+- **Trabajos de varios días (visitas)**: una sola orden con `visits[]` (un día = una visita). El técnico
+  registra el "trabajo por día" (nota + fotos por visita), edita/elimina cualquier día, y la orden queda
+  abierta hasta enviar a revisión. **Una factura, un reporte, checklist único** marcado entre días. El
+  detalle admin y el reporte público muestran un **acordeón por día** (`web/src/components/visits.tsx`).
 - **Evidencias**: subida resumable con progreso; los videos se comprimen en el servidor
-  (`onEvidenceFinalized`, ffmpeg 720p).
+  (`onEvidenceFinalized`, ffmpeg 720p). Cada evidencia se etiqueta con `visitId` (a qué día pertenece).
+  En **emuladores** la subida es directa (`uploadBytes`): el emulador de Storage cuelga las subidas
+  resumables.
 - **Wiki**: Markdown sanitizado, adjuntos, categorías, búsqueda; soporta `@[video](url)`.
 
 ## Módulo de inventario
@@ -204,8 +211,9 @@ que lo creado aparece de inmediato en la app.
 Tools del MCP (todas tenant-scoped a `tenants/{MCP_TENANT_ID}/…`):
 
 - **Tickets:** `create_ticket`, `list_tickets`, `get_ticket`, `assign_ticket`, `add_checklist_items`,
-  `list_technicians`; ciclo de vida: `approve_ticket`, `reject_ticket`, `close_ticket`,
-  `set_ticket_status`, `add_ticket_comment` (correos y rebaja de stock los aplica el trigger).
+  `add_ticket_visit` (registra un día de trabajo en una orden de varios días), `list_technicians`; ciclo
+  de vida: `approve_ticket`, `reject_ticket`, `close_ticket`, `set_ticket_status`, `add_ticket_comment`
+  (correos y rebaja de stock los aplica el trigger).
 - **Personal / usuarios** (Auth Admin SDK, solo el MCP interno stdio): `list_staff`, `create_technician`
   (técnico o escritorio coordinador/facturación; devuelve la contraseña inicial), `update_technician`
   (nombre/teléfono/correo/activo/roles multi-rol), `reset_technician_password`,

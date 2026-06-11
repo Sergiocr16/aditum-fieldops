@@ -70,8 +70,12 @@ npm --prefix mcp run build                       # se usa vía .mcp.json (server
 
 - `users/{uid}`: name, email, role, phone, active, initials, createdAt. (Solo se escribe vía Functions.)
 - `tickets/{id}`: num (AD-####), title, client, site, address, priority, status, techId, fechas,
-  description/instructions/expected/doneConditions/observations/evidenceReq, techNote/techObs, readyAt,
+  description/instructions/expected/doneConditions/observations/evidenceReq, techObs, readyAt,
   `checklist[]`, `evidence[]`, `history[]`, `comments[]`, `approval?`, `share{token,active,...}`.
+  Trabajos de varios días: `visits[]` (`{id,date,techId,techName,note,hours}`) — una orden con varias
+  visitas (un día = una visita). Cada `evidence[]` y cada `checklist[]` lleva `visitId` (a qué día
+  pertenece la foto / en qué visita se completó el ítem). `techNote` queda legacy; el "qué se hizo" vive
+  en `visits[].note`.
 - `counters/tickets`: contador atómico para `num`.
 - `wikiCategories/{id}`, `wikiPages/{id}` (status DRAFT|PUBLISHED|INACTIVE, contentMarkdown, attachments[]).
 - `inventory/{id}` (name, quantity, minQty, purchaseLink, description, nameKey) + `inventoryMovements/{id}`
@@ -84,7 +88,13 @@ Estados de ticket: pendiente, asignado, en_proceso, listo_revision, aprobado, re
 - Técnico: contraseña **auto-generada y oculta** en el formulario; se muestra en la tarjeta de
   credenciales al crear; acción **Regenerar contraseña** (`resetTechnicianPassword`).
 - Link público: `getPublicTicket` muestra el reporte si el link está **activo** (no exige un estado
-  concreto del ticket); valida token + expiración y devuelve un DTO **saneado**.
+  concreto del ticket); valida token + expiración y devuelve un DTO **saneado** (incluye `visits[]` y la
+  `visitId` de cada evidencia para el desglose por día).
+- Trabajos de varios días: **una sola orden con `visits[]`** (estándar FSM, no órdenes enlazadas). El
+  técnico registra "trabajo por día" (nota + fotos por visita) en `screens/mobile/MobileTicket.tsx`;
+  la orden queda abierta entre días. **Una factura, un reporte, checklist único** marcado entre días.
+  UI consistente con el acordeón compartido `web/src/components/visits.tsx` (`VisitBar`/`VisitDayChip`)
+  en móvil, detalle admin y reporte público.
 - Notificaciones: `onTicketWritten` (trigger Firestore + `functions/src/notifications.ts`, Gmail SMTP)
   envía correos en asignación, listo-para-revisión (→ `ADMIN_NOTIFY_EMAIL`), rechazo y aprobación.
   Secrets `SMTP_USER`/`SMTP_PASS`. Remitente `SMTP_FROM` (service@aditumcr.com).

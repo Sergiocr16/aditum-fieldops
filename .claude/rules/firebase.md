@@ -7,7 +7,10 @@
 - **Tickets**: el cliente (admin) los crea con una transacción sobre `counters/tickets` para el número
   `AD-####`. Las transiciones de estado escriben siempre una entrada en `history` (ver `web/src/lib/actions.ts`).
 - **Reglas como segunda capa**: además de validar en Functions, mantené `firestore.rules` y `storage.rules`
-  estrictas. Un técnico solo lee/escribe tickets donde `techId == auth.uid` y en estados editables.
+  estrictas. Un técnico solo lee/escribe tickets donde `techId == auth.uid` y en estados editables, y solo
+  los campos de la lista blanca (`status,checklist,evidence,history,materials,materialsNote,readyAt,
+  techNote,techObs,visits`). Si agregás un campo que el técnico escribe (ej. otro de `visits`), sumalo a
+  esa lista en `firestore.rules`.
 - **Storage**: rutas `tickets/{ticketId}/...` y `wiki/{pageId}/...`. Valida `contentType` y tamaño en las
   rules. La compresión de video la hace `onEvidenceFinalized`.
 - **Vista pública**: SOLO vía la function `getPublicTicket` (token). Nunca expongas comentarios internos,

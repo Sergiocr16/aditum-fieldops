@@ -6,6 +6,11 @@
 - Reutiliza componentes de `web/src/components/ui.tsx` (`Icon`, `Logo`, `Button`, `Modal`, `StatusBadge`,
   `PriorityChip`, `Field`, `Input`, `Select`, `Toggle`, `EmptyState`, `EvidenceThumb`, `Lightbox`,
   `Timeline`, `SharePanel`, `Markdown`, `LangSwitcher`, `toast`). No dupliques.
+- **Visitas (trabajo por día)**: el acordeón por día vive en `web/src/components/visits.tsx`
+  (`VisitBar` + `VisitDayChip`, chip de fecha tipo calendario). Reúsalo en móvil, detalle admin y reporte
+  público para que las 3 vistas queden consistentes. **No** uses bordes laterales de color como acento
+  (anti-patrón): el chip de fecha es el ancla visual. Motion solo en `transform` (chevron) y `.fade-in`;
+  no animes `height`.
 - Iconos: usa los del set `ICONS` (prop `name` de `<Icon/>`). Si falta uno, agrégalo al objeto `ICONS`.
 - Paleta: azul marino (`--navy-*`) + dorado (`--gold*`) + neutros. **Prohibido el color teal.**
 - Móvil first para pantallas del técnico (`screens/mobile/`), escritorio para admin (`screens/admin/`).
