@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../lib/firebase';
-import { BrandLogo, Icon, SOStatusBadge, Lightbox, LangSwitcher } from '../../components/ui';
+import { BrandLogo, Icon, SOStatusBadge, MediaGallery, LangSwitcher } from '../../components/ui';
 import { brandVars } from '../../lib/branding';
 import DynamicChecklist from '../../components/DynamicChecklist';
 import { PublicError } from './PublicView';
@@ -16,7 +16,6 @@ export default function PublicServiceReport() {
   const [branding, setBranding] = useState<any>(null);
   const [err, setErr] = useState<'desactivado' | 'expirado' | '404' | null>(null);
   const [loading, setLoading] = useState(true);
-  const [lb, setLb] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -99,11 +98,7 @@ export default function PublicServiceReport() {
             <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '.06em', margin: '0 0 12px' }}>
               {t('publicReport.photos')}
             </h2>
-            <div className="evidence-grid">
-              {photos.map((p: any, i: number) => (
-                <img key={p.id} src={p.file} style={{ width: '100%', height: 130, objectFit: 'cover', borderRadius: 10, cursor: 'pointer' }} onClick={() => setLb(i)} />
-              ))}
-            </div>
+            <MediaGallery items={photos} />
           </div>
         )}
 
@@ -139,7 +134,6 @@ export default function PublicServiceReport() {
         <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-3)', marginTop: 32 }}>{t('brand.developedBy')}</p>
       </div>
 
-      {lb !== null && <Lightbox items={photos} index={lb} onClose={() => setLb(null)} onIndex={setLb} />}
     </div>
   );
 }

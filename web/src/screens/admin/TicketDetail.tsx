@@ -2,8 +2,8 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Icon, Avatar, Button, StatusBadge, PriorityChip, EmptyState, EvidenceThumb,
-  Lightbox, Timeline, SharePanel, Toggle, toast,
+  Icon, Avatar, Button, StatusBadge, PriorityChip, EmptyState, MediaGallery,
+  Timeline, SharePanel, Toggle, toast,
 } from '../../components/ui';
 import { VisitBar } from '../../components/visits';
 import { RejectModal, ApproveModal, ReassignModal } from './modals';
@@ -12,7 +12,7 @@ import type { AppCtx } from '../../lib/ctx';
 import type { Comment, Ticket } from '../../lib/types';
 
 /** Timeline de visitas (trabajo por día) de una orden, con sus fotos por día. */
-function VisitsTimeline({ tk, onPhoto }: { tk: Ticket; onPhoto: (i: number) => void }) {
+function VisitsTimeline({ tk }: { tk: Ticket }) {
   const { t } = useTranslation();
   const visits = tk.visits || [];
   const lastId = visits.length ? visits[visits.length - 1].id : '';
@@ -39,11 +39,7 @@ function VisitsTimeline({ tk, onPhoto }: { tk: Ticket; onPhoto: (i: number) => v
                     {v.note || <span style={{ color: 'var(--text-3)' }}>{t('common.noInfo')}</span>}
                     {v.hours ? <span className="mono" style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-3)' }}>· {v.hours}h</span> : null}
                   </p>
-                  {photos.length > 0 && (
-                    <div className="evidence-grid">
-                      {photos.map((ev) => { const gi = tk.evidence.indexOf(ev); return <EvidenceThumb key={ev.id} src={ev.file} type={ev.type} onClick={() => onPhoto(gi)} h={92} />; })}
-                    </div>
-                  )}
+                  <MediaGallery items={photos} />
                 </div>
               )}
             </div>
@@ -112,7 +108,6 @@ export default function TicketDetailAdmin({ ctx, id }: { ctx: AppCtx; id: string
   const { t } = useTranslation();
   const tk = ctx.db.tickets.find((x) => x.id === id);
   const [modal, setModal] = useState<string | null>(null);
-  const [lb, setLb] = useState<number | null>(null);
   const [newComment, setNewComment] = useState('');
   if (!tk) return <div style={{ padding: 40 }}>{t('ticketDetail.notFound')}</div>;
   const tech = ctx.db.technicians.find((x) => x.id === tk.techId);
@@ -194,7 +189,7 @@ export default function TicketDetailAdmin({ ctx, id }: { ctx: AppCtx; id: string
             <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: 'var(--text)' }}>{tk.evidenceReq}</p>
           </Block>
 
-          <VisitsTimeline tk={tk} onPhoto={setLb} />
+          <VisitsTimeline tk={tk} />
 
           {tk.techObs || tk.readyAt || tk.techNote ? (
             <Block title={t('ticketDetail.workDone')} icon="check">
@@ -249,15 +244,7 @@ export default function TicketDetailAdmin({ ctx, id }: { ctx: AppCtx; id: string
 
           <Block title={`${t('ticketDetail.gallery')} · ${tk.evidence.length}`} icon="camera">
             {tk.evidence.length ? (
-              <div className="evidence-grid">
-                {tk.evidence.map((ev, i) => (
-                  <div key={i}>
-                    <EvidenceThumb src={ev.file} type={ev.type} onClick={() => setLb(i)} h={120} />
-                    <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 6, lineHeight: 1.3 }}>{ev.desc}</div>
-                    <div className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>{ev.date}</div>
-                  </div>
-                ))}
-              </div>
+              <MediaGallery items={tk.evidence} captions />
             ) : (
               <EmptyState icon="camera" title={t('ticketDetail.noEvidenceTitle')} sub={t('ticketDetail.noEvidenceSub')} />
             )}
@@ -377,7 +364,6 @@ export default function TicketDetailAdmin({ ctx, id }: { ctx: AppCtx; id: string
       <RejectModal open={modal === 'reject'} onClose={() => setModal(null)} onConfirm={(c: string) => { rejectTicket(ctx, tk, c); setModal(null); toast(t('ticketDetail.rejected'), 'error'); }} />
       <ApproveModal open={modal === 'approve'} onClose={() => setModal(null)} onConfirm={(c: string) => { approveTicket(ctx, tk, c); setModal(null); toast(t('ticketDetail.approved'), 'success'); }} />
       <ReassignModal open={modal === 'reassign'} ticket={tk} ctx={ctx} onClose={() => setModal(null)} onConfirm={(tid: string) => { reassignTicket(ctx, tk, tid); setModal(null); toast(t('ticketDetail.reassigned'), 'success'); }} />
-      {lb != null && <Lightbox items={tk.evidence} index={lb} onClose={() => setLb(null)} onIndex={setLb} />}
     </div>
   );
 }

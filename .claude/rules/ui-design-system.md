@@ -5,7 +5,11 @@
   (`.card`, `.btn`, `.badge`, `.chip`, `.field`, `.input`, `.data-table`, `.m-*`, etc.) antes de crear CSS nuevo.
 - Reutiliza componentes de `web/src/components/ui.tsx` (`Icon`, `Logo`, `Button`, `Modal`, `StatusBadge`,
   `PriorityChip`, `Field`, `Input`, `Select`, `Toggle`, `EmptyState`, `EvidenceThumb`, `Lightbox`,
-  `Timeline`, `SharePanel`, `Markdown`, `LangSwitcher`, `toast`). No dupliques.
+  `MediaGallery`, `Timeline`, `SharePanel`, `Markdown`, `LangSwitcher`, `toast`). No dupliques.
+- **Evidencias (fotos/videos/PDF)**: usa `MediaGallery` de `ui.tsx` — grid de miniaturas con tope de
+  tamaño (`aspect-ratio`), lightbox interno (teclado + flechas), video con primer frame + overlay de play
+  y los PDF como filas de archivo. **No** renderices imágenes a ancho completo apiladas. Reúsalo en admin,
+  móvil y reporte público. Prop `captions` muestra desc/fecha bajo cada tile (vista admin).
 - **Visitas (trabajo por día)**: el acordeón por día vive en `web/src/components/visits.tsx`
   (`VisitBar` + `VisitDayChip`, chip de fecha tipo calendario). Reúsalo en móvil, detalle admin y reporte
   público para que las 3 vistas queden consistentes. **No** uses bordes laterales de color como acento

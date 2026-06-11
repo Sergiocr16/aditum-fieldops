@@ -499,9 +499,17 @@ export function EvidenceThumb({ src, type, onClick, h = 120 }: any) {
       onClick={onClick}
       style={{ position: 'relative', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', padding: 0, cursor: 'pointer', height: h, background: '#08283d', display: 'block', width: '100%' }}
     >
-      <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      {type === 'video' ? (
+        <video src={src + '#t=0.1'} preload="metadata" muted playsInline tabIndex={-1} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      ) : type === 'pdf' ? (
+        <span style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,.85)' }}>
+          <Icon name="file" size={26} />
+        </span>
+      ) : (
+        <img src={src} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      )}
       {type === 'video' && (
-        <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(180deg,rgba(0,18,30,.04),rgba(0,18,30,.4))' }}>
           <span style={{ width: 42, height: 42, borderRadius: '50%', background: 'rgba(0,30,47,.55)', border: '2px solid rgba(255,255,255,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', paddingLeft: 3 }}>
             <Icon name="play" size={18} fill="#fff" />
           </span>
@@ -546,9 +554,18 @@ export function Lightbox({ items, index, onClose, onIndex }: { items: Evidence[]
         </button>
         <div style={{ flex: 1, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', maxWidth: 1000 }}>
           {it.type === 'video' ? (
-            <video src={it.file} poster={it.file} controls style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 12, display: 'block', background: '#000' }}>
+            <video key={it.file} src={it.file} controls playsInline preload="metadata" style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 12, display: 'block', background: '#000' }}>
               {t('public.playVideo')}
             </video>
+          ) : it.type === 'pdf' ? (
+            <a href={it.file} target="_blank" rel="noreferrer" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, color: '#fff', textDecoration: 'none' }}>
+              <span style={{ width: 72, height: 72, borderRadius: 16, background: 'rgba(255,255,255,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="file" size={32} />
+              </span>
+              <span className="btn" style={{ background: '#fff', color: 'var(--navy-900)' }}>
+                <Icon name="download" size={16} /> {it.name || 'PDF'}
+              </span>
+            </a>
           ) : (
             <img src={it.file} style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 12, display: 'block', objectFit: 'contain' }} />
           )}
@@ -558,6 +575,78 @@ export function Lightbox({ items, index, onClose, onIndex }: { items: Evidence[]
         </button>
       </div>
     </div>
+  );
+}
+
+/* ---------------- Media gallery (evidence) ----------------
+   Grid de miniaturas con tope de tamaño + lightbox interno. Imágenes y videos
+   van como tiles (el video muestra su primer frame con overlay de play); los PDF
+   se listan como filas de archivo. Reúsalo en admin y reporte público para que
+   las fotos no se vean a ancho completo. */
+export function MediaGallery({ items, captions = false, ratio = '4 / 3' }: { items: Evidence[]; captions?: boolean; ratio?: string }) {
+  const { t } = useTranslation();
+  const [lb, setLb] = useState<number | null>(null);
+  if (!items || !items.length) return null;
+  const media = items.filter((e) => e.type !== 'pdf');
+  const files = items.filter((e) => e.type === 'pdf');
+  return (
+    <>
+      {media.length > 0 && (
+        <div className="media-grid">
+          {media.map((ev, i) => {
+            const processing = ev.type === 'video' && ev.status === 'processing';
+            const tile = (
+              <button
+                className="media-tile"
+                style={{ aspectRatio: ratio }}
+                onClick={() => setLb(i)}
+                aria-label={ev.desc || (ev.type === 'video' ? t('common.video') : t('common.photo'))}
+              >
+                {ev.type === 'video' ? (
+                  <video src={ev.file + '#t=0.1'} preload="metadata" muted playsInline tabIndex={-1} />
+                ) : (
+                  <img src={ev.file} alt={ev.desc || ''} loading="lazy" />
+                )}
+                {ev.type === 'video' && (
+                  <span className="media-play">
+                    <span className="media-play-btn">
+                      {processing ? <span className="spin"><Icon name="refresh" size={15} /></span> : <Icon name="play" size={16} fill="#fff" />}
+                    </span>
+                  </span>
+                )}
+              </button>
+            );
+            return captions ? (
+              <div key={ev.id || i}>
+                {tile}
+                {(ev.desc || ev.date) && (
+                  <div className="media-cap">
+                    {ev.desc && <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.3 }}>{ev.desc}</div>}
+                    {ev.date && <div className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>{ev.date}</div>}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <span key={ev.id || i} style={{ display: 'contents' }}>{tile}</span>
+            );
+          })}
+        </div>
+      )}
+      {files.length > 0 && (
+        <div className="media-files">
+          {files.map((ev, i) => (
+            <a key={ev.id || 'f' + i} href={ev.file} target="_blank" rel="noreferrer" className="media-file">
+              <span style={{ width: 36, height: 36, borderRadius: 9, background: 'var(--st-rech-bg)', color: 'var(--st-rech-fg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
+                <Icon name="file" size={17} />
+              </span>
+              <span style={{ flex: 1, fontWeight: 600, fontSize: 13.5 }}>{ev.name || ev.desc || 'PDF'}</span>
+              <Icon name="download" size={17} style={{ color: 'var(--text-3)' }} />
+            </a>
+          ))}
+        </div>
+      )}
+      {lb != null && <Lightbox items={media} index={lb} onClose={() => setLb(null)} onIndex={setLb} />}
+    </>
   );
 }
 

@@ -1,7 +1,7 @@
 /* © 2026 Aditum — Aditum FieldOps — Service-order detail (admin) */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Icon, Button, Modal, Field, Input, Select, Textarea, EmptyState, SOStatusBadge, Lightbox, toast, confirmDialog } from '../../components/ui';
+import { Icon, Button, Modal, Field, Input, Select, Textarea, EmptyState, SOStatusBadge, MediaGallery, toast, confirmDialog } from '../../components/ui';
 import { PageHeader } from './AdminShell';
 import { useServiceOrder, useServiceOrderActions } from '../../lib/serviceOrders';
 import DynamicChecklist from '../../components/DynamicChecklist';
@@ -22,7 +22,6 @@ export default function ServiceOrderDetail({ ctx, id }: { ctx: AppCtx; id: strin
   const actions = useServiceOrderActions();
   const [reschedOpen, setReschedOpen] = useState(false);
   const [resched, setResched] = useState({ date: '', time: '08:00', techId: '', durationMin: 60, notes: '' });
-  const [lightbox, setLightbox] = useState<number | null>(null);
 
   if (loading) return null;
   if (!so) return <EmptyState icon="calendar" title={t('serviceOrders.notFound')} sub="" />;
@@ -96,11 +95,7 @@ export default function ServiceOrderDetail({ ctx, id }: { ctx: AppCtx; id: strin
           {(so.photos || []).length > 0 && (
             <div className="card card-pad">
               <div className="section-label" style={{ marginBottom: 12 }}>{t('serviceOrders.photos')}</div>
-              <div className="evidence-grid">
-                {so.photos.map((p, i) => (
-                  <img key={p.id} src={p.url} alt={p.desc || ''} style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 10, cursor: 'pointer' }} onClick={() => setLightbox(i)} />
-                ))}
-              </div>
+              <MediaGallery items={lightboxItems} />
             </div>
           )}
 
@@ -196,8 +191,6 @@ export default function ServiceOrderDetail({ ctx, id }: { ctx: AppCtx; id: strin
         </Field>
         <p style={{ fontSize: 12.5, color: 'var(--text-3)', margin: '6px 0 0' }}>{t('serviceOrders.reschedHint')}</p>
       </Modal>
-
-      {lightbox !== null && <Lightbox items={lightboxItems} index={lightbox} onClose={() => setLightbox(null)} onIndex={setLightbox} />}
     </div>
   );
 }
