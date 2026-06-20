@@ -139,12 +139,6 @@ export function EquipmentFormModal({
             {ctx.db.technicians.filter((x) => x.active).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
           </Select>
         </Field>
-        <Field label={t('equipment.fPeriodicity')} hint={t('equipment.fPeriodicityHint')}>
-          <Select value={f.periodicityMonths} onChange={(e: any) => set('periodicityMonths', e.target.value)}>
-            <option value="">{t('equipment.contractDefault')}</option>
-            {PERIODICITY_OPTIONS.map((p) => <option key={p} value={p}>{perLabel(t, p)}</option>)}
-          </Select>
-        </Field>
         <Field label={t('equipment.fNext')} hint={t('equipment.fNextHint')}>
           <Input type="date" value={f.nextScheduledDate} onChange={(e: any) => set('nextScheduledDate', e.target.value)} />
         </Field>
@@ -162,16 +156,28 @@ export function EquipmentTypesScreen({ ctx }: { ctx: AppCtx }) {
   const eq = useEquipment();
   const [name, setName] = useState('');
 
+  const [adding, setAdding] = useState(false);
   const add = async () => {
-    if (!name.trim()) return;
-    const exists = eq.types.some((x) => x.name.trim().toLowerCase() === name.trim().toLowerCase());
+    const n = name.trim();
+    if (!n) {
+      toast(t('equipment.typeNameRequired'), 'error');
+      return;
+    }
+    const exists = eq.types.some((x) => (x.name || '').trim().toLowerCase() === n.toLowerCase());
     if (exists) {
       toast(t('equipment.typeExists'), 'error');
       return;
     }
-    await eq.addType(name);
-    setName('');
-    toast(t('equipment.typeAdded'), 'success');
+    setAdding(true);
+    try {
+      await eq.addType(n);
+      setName('');
+      toast(t('equipment.typeAdded'), 'success');
+    } catch (e: any) {
+      toast(e?.message || 'Error', 'error');
+    } finally {
+      setAdding(false);
+    }
   };
 
   return (
@@ -182,7 +188,7 @@ export function EquipmentTypesScreen({ ctx }: { ctx: AppCtx }) {
           <div style={{ flex: 1 }}>
             <Input placeholder={t('equipment.typePh')} value={name} onChange={(e: any) => setName(e.target.value)} onKeyDown={(e: any) => e.key === 'Enter' && add()} />
           </div>
-          <Button icon="plus" onClick={add}>{t('common.create')}</Button>
+          <Button icon="plus" onClick={add} disabled={adding}>{adding ? '…' : t('common.create')}</Button>
         </div>
         {eq.types.length === 0 ? (
           <EmptyState icon="cpu" title={t('equipment.noTypes')} sub={t('equipment.noTypesSub')} />

@@ -17,19 +17,19 @@ export interface ModuleDef {
 }
 
 /** Módulos que usa la empresa (a nivel tenant). Ausente = todos activos. */
-export type TenantFeature = 'tickets' | 'maintenance' | 'inventory' | 'wiki' | 'fiscal';
-export const TENANT_FEATURES: TenantFeature[] = ['tickets', 'maintenance', 'inventory', 'wiki', 'fiscal'];
+export type TenantFeature = 'maintenance' | 'inventory' | 'wiki' | 'fiscal';
+export const TENANT_FEATURES: TenantFeature[] = ['maintenance', 'inventory', 'wiki', 'fiscal'];
 
 export const MODULES: ModuleDef[] = [
-  // Orden: panorama → trabajo operativo (OT, OS, calendario) → cadena de mantenimiento
+  // Orden: panorama → trabajo operativo (Órdenes, calendario) → cadena de mantenimiento
   // (contratos, equipos, inventario) → facturación → personas → referencia → ajustes.
   { key: 'dashboard', labelKey: 'nav.dashboard', icon: 'dashboard', route: 'dashboard', routes: ['dashboard'], locked: true },
-  { key: 'tickets', labelKey: 'nav.tickets', icon: 'clipboard', route: 'tickets', routes: ['tickets', 'ticketForm', 'ticketDetail'], feature: 'tickets' },
-  { key: 'serviceOrders', labelKey: 'serviceOrders.nav', icon: 'wrench', route: 'serviceOrders', routes: ['serviceOrders', 'soDetail'], feature: 'maintenance' },
+  { key: 'serviceOrders', labelKey: 'nav.orders', icon: 'clipboard', route: 'serviceOrders', routes: ['serviceOrders', 'soDetail'], feature: 'maintenance' },
   { key: 'calendar', labelKey: 'calendar.nav', icon: 'calendar', route: 'calendar', routes: ['calendar'], feature: 'maintenance' },
   { key: 'contracts', labelKey: 'contracts.nav', icon: 'file', route: 'contracts', routes: ['contracts', 'contractForm', 'contractDetail'], feature: 'maintenance' },
   { key: 'equipment', labelKey: 'equipment.nav', icon: 'cpu', route: 'equipment', routes: ['equipment', 'equipmentTypes', 'templateEditor'], feature: 'maintenance' },
   { key: 'inventory', labelKey: 'inventory.nav', icon: 'box', route: 'inventory', routes: ['inventory'], feature: 'inventory' },
+  { key: 'hoursReport', labelKey: 'nav.hoursReport', icon: 'clock', route: 'hoursReport', routes: ['hoursReport'], feature: 'maintenance' },
   { key: 'billing', labelKey: 'billing.nav', icon: 'receipt', route: 'billing', routes: ['billing', 'invoiceNew', 'invoiceDetail'], feature: 'maintenance' },
   { key: 'fiscalSettings', labelKey: 'gti.menuNav', icon: 'file', route: 'fiscalHub', routes: ['fiscalHub', 'gtiSettings', 'chargeTypes', 'clients'], feature: 'fiscal' },
   { key: 'technicians', labelKey: 'nav.technicians', icon: 'users', route: 'technicians', routes: ['technicians'] },

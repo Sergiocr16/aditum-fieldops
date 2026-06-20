@@ -80,14 +80,21 @@ export function validTenantId(id: string): boolean {
 }
 
 /* ---------------- maintenance: contracts & equipment ---------------- */
-export type PeriodicityMonths = 1 | 2 | 3 | 6 | 12;
-export const PERIODICITIES: PeriodicityMonths[] = [1, 2, 3, 6, 12];
+/** Periodicidad de mantenimiento en meses. `0.5` = quincenal (cada 15 días). */
+export type PeriodicityMonths = 0.5 | 1 | 2 | 3 | 6 | 12;
+export const PERIODICITIES: PeriodicityMonths[] = [0.5, 1, 2, 3, 6, 12];
+
+/** Modalidad del contrato: 'periodico' (mantenimiento programado por el scheduler)
+    o 'demanda' (trabajo puntual; el scheduler no genera órdenes). */
+export type ContractModality = 'periodico' | 'demanda';
+export const CONTRACT_MODALITIES: ContractModality[] = ['periodico', 'demanda'];
 
 export interface NewContractInput {
   licitacionNum: string;
   clientName: string;
   clientEmail?: string;
   clientPhone?: string;
+  modality?: ContractModality;
   startDate?: string; // YYYY-MM-DD
   endDate?: string;
   defaultPeriodicityMonths?: PeriodicityMonths;
@@ -101,6 +108,7 @@ export function validateContract(input: NewContractInput): string[] {
   if (!input || typeof input !== 'object') return ['Invalid payload'];
   if (!input.licitacionNum?.trim()) errors.push('licitacionNum is required');
   if (!input.clientName?.trim()) errors.push('clientName is required');
+  if (input.modality && !CONTRACT_MODALITIES.includes(input.modality)) errors.push('invalid modality');
   if (input.defaultPeriodicityMonths && !PERIODICITIES.includes(input.defaultPeriodicityMonths)) errors.push('invalid periodicity');
   if (input.startDate && input.endDate && input.endDate < input.startDate) errors.push('endDate before startDate');
   return errors;
@@ -113,6 +121,7 @@ export function buildContractDoc(input: NewContractInput, by: string) {
     clientName: input.clientName.trim(),
     clientEmail: (input.clientEmail || '').trim(),
     clientPhone: (input.clientPhone || '').trim(),
+    modality: (input.modality && CONTRACT_MODALITIES.includes(input.modality) ? input.modality : 'periodico') as ContractModality,
     startDate: input.startDate || '',
     endDate: input.endDate || '',
     defaultPeriodicityMonths: (input.defaultPeriodicityMonths && PERIODICITIES.includes(input.defaultPeriodicityMonths) ? input.defaultPeriodicityMonths : 3) as PeriodicityMonths,
@@ -221,9 +230,35 @@ export function computeNoticeDate(scheduledDate: string, daysBefore: number): st
   return addDaysCR(scheduledDate, -Math.abs(daysBefore));
 }
 
+/** Avanza una fecha según la periodicidad (meses). `< 1` = quincenal (15 días). */
+export function addPeriodCR(dateStr: string, per: number): string {
+  return per && per < 1 ? addDaysCR(dateStr, 15) : addMonthsCR(dateStr, Math.round(per || 0));
+}
+
 /** Deterministic service-order id for a planned preventive visit (scheduler idempotency). */
 export function soPlanId(equipmentId: string, dateStr: string): string {
   return 'eq_' + equipmentId + '_' + dateStr.replace(/-/g, '');
+}
+
+/** Deterministic id de una visita preventiva A NIVEL CONTRATO (una orden agrupa todos los equipos). */
+export function soContractPlanId(contractId: string, dateStr: string): string {
+  return 'co_' + contractId + '_' + dateStr.replace(/-/g, '');
+}
+
+/** Normaliza la lectura multi-equipo: usa `equipments[]` si existe; si no, sintetiza
+    un arreglo de 1 desde los campos legacy (orden vieja de un solo equipo). Demanda → []. */
+export function soEquipments(so: any): SOEquipment[] {
+  if (Array.isArray(so?.equipments) && so.equipments.length) return so.equipments;
+  if (so?.equipmentSnapshot) {
+    return [{
+      equipmentId: so.equipmentId || '',
+      equipmentSnapshot: so.equipmentSnapshot,
+      checklistTemplateId: so.checklistTemplateId ?? null,
+      checklistTemplateVersion: so.checklistTemplateVersion ?? null,
+      checklist: so.checklist || [],
+    }];
+  }
+  return [];
 }
 
 /* ---------------- maintenance: availability slots (pure helpers) ---------------- */
@@ -285,26 +320,35 @@ export type ServiceOrderStatus =
   | 'REAGENDADA'
   | 'EN_PROGRESO'
   | 'SERVICIO_TERMINADO'
+  | 'EN_REVISION'       // compuerta de revisión interna (ex listo_revision de OT): admin aprueba/rechaza
   | 'PENDIENTE_FACTURAR'
   | 'FACTURADA'
+  | 'CERRADA'           // terminal sin/ tras facturación (ex cerrado de OT)
   | 'CANCELADA';
 
 export const SO_STATUSES: ServiceOrderStatus[] = [
   'PROGRAMADA', 'NOTIFICADA', 'CONFIRMADA', 'REAGENDADA', 'EN_PROGRESO',
-  'SERVICIO_TERMINADO', 'PENDIENTE_FACTURAR', 'FACTURADA', 'CANCELADA',
+  'SERVICIO_TERMINADO', 'EN_REVISION', 'PENDIENTE_FACTURAR', 'FACTURADA', 'CERRADA', 'CANCELADA',
 ];
 
 export type ServiceOrderType = 'preventivo' | 'correctivo';
 
+/** Modalidad de la orden, derivada del contrato (o explícita si la orden no tiene contrato).
+    'periodico' = mantenimiento programado (scheduler); 'demanda' = trabajo puntual (ex OT). */
+export type ServiceOrderMode = 'periodico' | 'demanda';
+export const SO_MODES: ServiceOrderMode[] = ['periodico', 'demanda'];
+
 export const SO_TRANSITIONS: Record<ServiceOrderStatus, ServiceOrderStatus[]> = {
-  PROGRAMADA: ['NOTIFICADA', 'EN_PROGRESO', 'CANCELADA'],            // correctivo con skipNotice salta directo
+  PROGRAMADA: ['NOTIFICADA', 'EN_PROGRESO', 'CANCELADA'],            // correctivo/demanda con skipNotice salta directo
   NOTIFICADA: ['CONFIRMADA', 'REAGENDADA', 'EN_PROGRESO', 'CANCELADA'],
   CONFIRMADA: ['EN_PROGRESO', 'REAGENDADA', 'CANCELADA'],
   REAGENDADA: ['NOTIFICADA', 'CONFIRMADA', 'EN_PROGRESO', 'CANCELADA'],
   EN_PROGRESO: ['SERVICIO_TERMINADO'],
-  SERVICIO_TERMINADO: ['PENDIENTE_FACTURAR'],
-  PENDIENTE_FACTURAR: ['FACTURADA'],
-  FACTURADA: [],
+  SERVICIO_TERMINADO: ['EN_REVISION', 'PENDIENTE_FACTURAR', 'CERRADA'], // → EN_REVISION si requiere revisión interna
+  EN_REVISION: ['PENDIENTE_FACTURAR', 'CERRADA', 'EN_PROGRESO'],        // aprobar → facturar/cerrar; rechazar → corrige
+  PENDIENTE_FACTURAR: ['FACTURADA', 'CERRADA'],
+  FACTURADA: ['CERRADA'],
+  CERRADA: [],
   CANCELADA: [],
 };
 
@@ -315,11 +359,30 @@ export function canTransition(from: ServiceOrderStatus, to: ServiceOrderStatus):
 /** States in which the slot of the order blocks the technician's agenda. */
 export const SO_BUSY_STATUSES: ServiceOrderStatus[] = ['PROGRAMADA', 'NOTIFICADA', 'CONFIRMADA', 'REAGENDADA', 'EN_PROGRESO'];
 
+/** Estados en los que el reporte público de la orden es visible (link compartible). */
+export const SO_SHAREABLE_STATUSES: ServiceOrderStatus[] = ['SERVICIO_TERMINADO', 'EN_REVISION', 'PENDIENTE_FACTURAR', 'FACTURADA', 'CERRADA'];
+
+export interface EquipmentSnapshot { typeId: string; typeName: string; brand: string; model: string; serial: string; location: string }
+
+/** Un equipo dentro de una orden multi-equipo, con su propio checklist de plantilla. */
+export interface SOEquipment {
+  equipmentId: string;
+  equipmentSnapshot: EquipmentSnapshot;
+  checklistTemplateId: string | null;
+  checklistTemplateVersion: number | null;
+  checklist: any[];
+}
+
 export interface NewServiceOrderInput {
   type: ServiceOrderType;
-  contractId: string;
-  equipmentId: string;
-  equipmentSnapshot: { typeId: string; typeName: string; brand: string; model: string; serial: string; location: string };
+  /** 'periodico' (contrato+equipo) o 'demanda' (puntual, contrato/equipo opcionales). Default 'periodico'. */
+  mode?: ServiceOrderMode;
+  contractId?: string | null;
+  /** Legacy single equipo (compat). Para multi-equipo usar `equipments`. */
+  equipmentId?: string | null;
+  equipmentSnapshot?: EquipmentSnapshot | null;
+  /** Varios equipos en una sola orden (periódico/correctivo). Cada uno trae su checklist al iniciar. */
+  equipments?: { equipmentId: string; equipmentSnapshot: EquipmentSnapshot }[];
   client: { name: string; email: string; phone: string };
   techId: string | null;
   planDate: string;        // occurrence date (immutable)
@@ -329,17 +392,54 @@ export interface NewServiceOrderInput {
   skipNotice?: boolean;
   noticeDaysBefore?: number;
   notes?: string;
+  // ---- campos de orden por demanda (ex OT) ----
+  title?: string;
+  site?: string;
+  address?: string;
+  priority?: Priority;
+  description?: string;
+  instructions?: string;
+  expected?: string;
+  doneConditions?: string;
+  evidenceReq?: string;
+  /** Items de checklist ad-hoc (demanda sin plantilla de equipo). */
+  checklistItems?: string[];
+  /** ¿Exige revisión/aprobación interna del admin antes de facturar/cerrar?
+      Default: true en demanda, false en periódico. */
+  requiresReview?: boolean;
+  // ---- facturación ----
+  requiresInvoice?: boolean;
+  chargeTypeId?: string | null;
+  clientId?: string | null;
+  billAmount?: number | null;
+  billCurrency?: 'CRC' | 'USD';
 }
 
 export function buildServiceOrderDoc(input: NewServiceOrderInput, by: string) {
   const ts = nowCR();
   const noticeDays = input.noticeDaysBefore ?? 3;
+  const mode: ServiceOrderMode = input.mode || 'periodico';
+  const requiresReview = input.requiresReview ?? (mode === 'demanda');
+  // checklist ad-hoc (demanda) -> mismo shape simple {id,text,done,...} que las OT
+  const adhocChecklist = (input.checklistItems || [])
+    .map((t) => (t || '').trim())
+    .filter(Boolean)
+    .map((text, i) => ({ id: `c${i}-${Math.random().toString(36).slice(2, 8)}`, text, done: false, by: null as string | null, at: null as string | null, visitId: null as string | null }));
   return {
     type: input.type,
+    mode,
     status: 'PROGRAMADA' as ServiceOrderStatus,
-    contractId: input.contractId,
-    equipmentId: input.equipmentId,
-    equipmentSnapshot: input.equipmentSnapshot,
+    contractId: input.contractId || null,
+    equipmentId: input.equipmentId || null,
+    equipmentSnapshot: input.equipmentSnapshot || null,
+    // Multi-equipo: cada equipo arranca con checklist vacío (se bindea la plantilla al iniciar).
+    equipments: (input.equipments || []).map((e) => ({
+      equipmentId: e.equipmentId,
+      equipmentSnapshot: e.equipmentSnapshot,
+      checklistTemplateId: null as string | null,
+      checklistTemplateVersion: null as number | null,
+      checklist: [] as any[],
+    })),
     client: input.client,
     techId: input.techId || null,
     planDate: input.planDate,
@@ -360,14 +460,42 @@ export function buildServiceOrderDoc(input: NewServiceOrderInput, by: string) {
     hold: null as any,
     checklistTemplateId: null as string | null,
     checklistTemplateVersion: null as number | null,
-    checklist: [] as any[],
+    checklist: adhocChecklist as any[],
     photos: [] as any[],
+    evidence: [] as any[],
+    visits: [] as any[],
     observations: '',
     notes: input.notes || '',
     signature: null as any,
     startedAt: null as string | null,
     finishedAt: null as string | null,
     reportShare: { active: false, token: null as string | null, url: null as string | null, created: null as string | null, lastVisit: null as string | null },
+    // ---- briefing (demanda) ----
+    title: input.title || '',
+    site: input.site || '',
+    address: input.address || '',
+    priority: input.priority || 'media',
+    description: input.description || '',
+    instructions: input.instructions || '',
+    expected: input.expected || '',
+    doneConditions: input.doneConditions || '',
+    evidenceReq: input.evidenceReq || '',
+    techObs: '',
+    readyAt: null as string | null,
+    // ---- revisión interna ----
+    requiresReview,
+    approval: null as any,
+    comments: [] as any[],
+    // ---- inventario ----
+    materials: [] as any[],
+    materialsNote: '',
+    materialsApplied: false,
+    // ---- facturación ----
+    requiresInvoice: !!input.requiresInvoice,
+    chargeTypeId: input.chargeTypeId || null,
+    clientId: input.clientId || null,
+    billAmount: input.billAmount ?? null,
+    billCurrency: input.billCurrency || 'CRC',
     billingApplied: false,
     invoiceItemId: null as string | null,
     cadenceApplied: false,
@@ -525,15 +653,38 @@ export async function createTicketWithNumber(
 
 /* ---------------- visitas (trabajos de varios días en una sola orden) ---------------- */
 
+export interface WorkSegment { start: string; end: string | null }
+
 export interface Visit {
   id: string;
   date: string;          // YYYY-MM-DD del día de la visita
   techId: string | null;
   techName: string;
   note: string;          // qué se hizo ese día
-  hours?: number | null; // horas trabajadas (opcional)
+  segments?: WorkSegment[]; // tramos de fichaje (iniciar/salir/reanudar)
+  hours?: number | null; // total del día (decimal), recalculado al cerrar un tramo
   at: string;            // timestamp de registro
   by: string;
+}
+
+/** Minutos entre dos timestamps 'YYYY-MM-DD HH:mm' (mismo huso). */
+export function minutesBetween(start?: string | null, end?: string | null): number {
+  if (!start || !end) return 0;
+  const p = (s: string) => { const [d, t] = s.split(' '); const [y, mo, da] = d.split('-').map(Number); const [h, mi] = (t || '00:00').split(':').map(Number); return Date.UTC(y, mo - 1, da, h, mi); };
+  const ms = p(end) - p(start);
+  return ms > 0 ? Math.round(ms / 60000) : 0;
+}
+
+/** Suma de minutos de tramos cerrados de una visita. */
+export function visitWorkedMinutes(visit: { segments?: WorkSegment[] } | null | undefined): number {
+  return (visit?.segments || []).reduce((a, s) => a + (s.end ? minutesBetween(s.start, s.end) : 0), 0);
+}
+
+/** Formatea minutos como "Xh Ym". */
+export function fmtDuration(min: number): string {
+  const m = Math.max(0, Math.round(min || 0));
+  const h = Math.floor(m / 60); const r = m % 60;
+  return h ? (r ? `${h}h ${r}m` : `${h}h`) : `${r}m`;
 }
 
 /** Arma una visita (un día de trabajo de una orden). */

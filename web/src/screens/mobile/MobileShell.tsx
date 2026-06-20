@@ -10,25 +10,21 @@ import { tenantHasFeature } from '../../lib/modules';
 import { useMyServiceOrders } from '../../lib/serviceOrders';
 import type { AppCtx } from '../../lib/ctx';
 
-export type TechTab = 'tickets' | 'orders' | 'calendar' | 'wiki';
+export type TechTab = 'orders' | 'calendar' | 'wiki';
 
-const ACTIVE_TICKET = (s: string) => s !== 'aprobado' && s !== 'cerrado';
 const ACTIVE_SO = ['PROGRAMADA', 'NOTIFICADA', 'CONFIRMADA', 'REAGENDADA', 'EN_PROGRESO'];
 
 export function TechShell({ ctx, active, children }: { ctx: AppCtx; active: TechTab; children: React.ReactNode }) {
   const { t } = useTranslation();
   const { tenant } = useTenant();
   const { orders } = useMyServiceOrders();
-  const featTickets = tenantHasFeature('tickets', tenant?.features);
   const featMaint = tenantHasFeature('maintenance', tenant?.features);
   const featWiki = tenantHasFeature('wiki', tenant?.features);
 
-  const ticketBadge = featTickets ? ctx.db.tickets.filter((x) => ACTIVE_TICKET(x.status)).length : 0;
   const orderBadge = featMaint ? orders.filter((o) => ACTIVE_SO.includes(o.status)).length : 0;
 
   const tabs = [
-    featTickets && { key: 'tickets' as const, route: 'techDashboard', icon: 'clipboard', label: t('nav.ticketsShort'), badge: ticketBadge },
-    featMaint && { key: 'orders' as const, route: 'techOrders', icon: 'wrench', label: t('mobileOrders.navShort'), badge: orderBadge },
+    featMaint && { key: 'orders' as const, route: 'techOrders', icon: 'clipboard', label: t('mobileOrders.navShort'), badge: orderBadge },
     { key: 'calendar' as const, route: 'techCalendar', icon: 'calendar', label: t('techCal.nav'), badge: 0 },
     featWiki && { key: 'wiki' as const, route: 'techWiki', icon: 'book', label: t('wiki.nav'), badge: 0 },
   ].filter(Boolean) as { key: TechTab; route: string; icon: string; label: string; badge: number }[];

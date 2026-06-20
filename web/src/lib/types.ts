@@ -46,7 +46,9 @@ export interface McpKeyMeta {
 }
 
 /* ---------------- maintenance: contracts & equipment ---------------- */
-export type PeriodicityMonths = 1 | 2 | 3 | 6 | 12;
+/** Periodicidad en meses; `0.5` = quincenal (cada 15 días). */
+export type PeriodicityMonths = 0.5 | 1 | 2 | 3 | 6 | 12;
+export type ContractModality = 'periodico' | 'demanda';
 
 export interface Contract {
   id: string;
@@ -55,6 +57,8 @@ export interface Contract {
   clientName: string;
   clientEmail: string;
   clientPhone: string;
+  /** 'periodico' = el scheduler genera órdenes; 'demanda' = solo órdenes puntuales. Default 'periodico'. */
+  modality?: ContractModality;
   startDate: string;
   endDate: string;
   defaultPeriodicityMonths: PeriodicityMonths;
@@ -140,9 +144,12 @@ export interface ChecklistTemplate {
 /* ---------------- maintenance: service orders ---------------- */
 export type ServiceOrderStatus =
   | 'PROGRAMADA' | 'NOTIFICADA' | 'CONFIRMADA' | 'REAGENDADA' | 'EN_PROGRESO'
-  | 'SERVICIO_TERMINADO' | 'PENDIENTE_FACTURAR' | 'FACTURADA' | 'CANCELADA';
+  | 'SERVICIO_TERMINADO' | 'EN_REVISION' | 'PENDIENTE_FACTURAR' | 'FACTURADA' | 'CERRADA' | 'CANCELADA';
 
 export type ServiceOrderType = 'preventivo' | 'correctivo';
+
+/** Modalidad de la orden, derivada del contrato (o explícita si no tiene contrato). */
+export type ServiceOrderMode = 'periodico' | 'demanda';
 
 export interface SOChecklistEntry {
   id: string;
@@ -178,14 +185,27 @@ export interface SOSignature {
   at: string;
 }
 
+export interface SOEquipment {
+  equipmentId: string;
+  equipmentSnapshot: { typeId: string; typeName: string; brand: string; model: string; serial: string; location: string };
+  checklistTemplateId: string | null;
+  checklistTemplateVersion: number | null;
+  checklist: SOChecklistEntry[];
+}
+
 export interface ServiceOrder {
   id: string;
   num: string;
   type: ServiceOrderType;
+  /** 'periodico' = mantenimiento programado; 'demanda' = trabajo puntual (ex OT). */
+  mode?: ServiceOrderMode;
   status: ServiceOrderStatus;
-  contractId: string;
-  equipmentId: string;
-  equipmentSnapshot: { typeId: string; typeName: string; brand: string; model: string; serial: string; location: string };
+  /** Opcional en modalidad 'demanda' (puede no colgar de un contrato/equipo). */
+  contractId: string | null;
+  equipmentId: string | null;
+  equipmentSnapshot: { typeId: string; typeName: string; brand: string; model: string; serial: string; location: string } | null;
+  /** Varios equipos por orden (cada uno con su checklist). Vacío en demanda. */
+  equipments?: SOEquipment[];
   client: { name: string; email: string; phone: string };
   techId: string | null;
   planDate: string;
@@ -206,7 +226,8 @@ export interface ServiceOrder {
   hold: { date: string; time: string; holdUntil: string } | null;
   checklistTemplateId: string | null;
   checklistTemplateVersion: number | null;
-  checklist: SOChecklistEntry[];
+  /** Periódico con plantilla: SOChecklistEntry[]; demanda ad-hoc: ChecklistItem[]. */
+  checklist: SOChecklistEntry[] | ChecklistItem[];
   photos: SOPhoto[];
   observations: string;
   notes?: string;
@@ -214,6 +235,36 @@ export interface ServiceOrder {
   startedAt: string | null;
   finishedAt: string | null;
   reportShare: ShareLink;
+  // ---- campos de orden por demanda (ex OT) ----
+  title?: string;
+  site?: string;
+  address?: string;
+  priority?: Priority;
+  description?: string;
+  instructions?: string;
+  expected?: string;
+  doneConditions?: string;
+  evidenceReq?: string;
+  techObs?: string;
+  readyAt?: string | null;
+  /** Evidencia libre (img/video/pdf) además del checklist con fotos de plantilla. */
+  evidence?: Evidence[];
+  /** Trabajo de varios días (un día = una visita). */
+  visits?: Visit[];
+  // ---- revisión interna ----
+  requiresReview?: boolean;
+  approval?: Approval | null;
+  comments?: Comment[];
+  // ---- inventario ----
+  materials?: MaterialUse[];
+  materialsNote?: string;
+  materialsApplied?: boolean;
+  // ---- facturación ----
+  requiresInvoice?: boolean;
+  chargeTypeId?: string | null;
+  clientId?: string | null;
+  billAmount?: number | null;
+  billCurrency?: 'CRC' | 'USD';
   billingApplied: boolean;
   invoiceItemId: string | null;
   cadenceApplied: boolean;
@@ -402,6 +453,12 @@ export interface Evidence {
   visitId?: string | null;
 }
 
+/** Tramo de trabajo (fichaje): entrada → salida. `end` null = en curso. */
+export interface WorkSegment {
+  start: string;        // 'YYYY-MM-DD HH:mm'
+  end: string | null;   // null mientras el cronómetro corre
+}
+
 /** Una visita = un día de trabajo de una orden. */
 export interface Visit {
   id: string;
@@ -409,7 +466,9 @@ export interface Visit {
   techId: string | null;
   techName: string;
   note: string; // qué se hizo ese día
-  hours?: number | null;
+  /** Tramos de fichaje del día (varias sesiones: iniciar/salir/reanudar). */
+  segments?: WorkSegment[];
+  hours?: number | null; // total del día (decimal), recalculado al cerrar un tramo
   at: string;
   by: string;
 }

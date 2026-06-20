@@ -18,6 +18,7 @@ export default function ContractForm({ ctx, mode, id }: { ctx: AppCtx; mode: str
     clientName: existing?.clientName || '',
     clientEmail: existing?.clientEmail || '',
     clientPhone: existing?.clientPhone || '',
+    modality: existing?.modality || 'periodico',
     startDate: existing?.startDate || '',
     endDate: existing?.endDate || '',
     defaultPeriodicityMonths: existing?.defaultPeriodicityMonths || 3,
@@ -40,6 +41,7 @@ export default function ContractForm({ ctx, mode, id }: { ctx: AppCtx; mode: str
         clientName: f.clientName.trim(),
         clientEmail: f.clientEmail.trim(),
         clientPhone: f.clientPhone.trim(),
+        modality: f.modality,
         startDate: f.startDate,
         endDate: f.endDate,
         defaultPeriodicityMonths: Number(f.defaultPeriodicityMonths) as any,
@@ -78,11 +80,19 @@ export default function ContractForm({ ctx, mode, id }: { ctx: AppCtx; mode: str
           <Field label={t('contracts.fLicitacion')} required hint={t('contracts.fLicitacionHint')}>
             <Input placeholder="2025LD-000021-0001102202" value={f.licitacionNum} onChange={(e: any) => set('licitacionNum', e.target.value)} />
           </Field>
-          <Field label={t('contracts.fPeriodicity')} hint={t('contracts.fPeriodicityHint')}>
-            <Select value={f.defaultPeriodicityMonths} onChange={(e: any) => set('defaultPeriodicityMonths', e.target.value)}>
-              {PERIODICITY_OPTIONS.map((p) => <option key={p} value={p}>{perLabel(t, p)}</option>)}
+          <Field label={t('contracts.fModality')} hint={t('contracts.fModalityHint')}>
+            <Select value={f.modality} onChange={(e: any) => set('modality', e.target.value)}>
+              <option value="periodico">{t('contracts.modality_periodico')}</option>
+              <option value="demanda">{t('contracts.modality_demanda')}</option>
             </Select>
           </Field>
+          {f.modality !== 'demanda' && (
+            <Field label={t('contracts.fPeriodicity')} hint={t('contracts.fPeriodicityHint')}>
+              <Select value={f.defaultPeriodicityMonths} onChange={(e: any) => set('defaultPeriodicityMonths', e.target.value)}>
+                {PERIODICITY_OPTIONS.map((p) => <option key={p} value={p}>{perLabel(t, p)}</option>)}
+              </Select>
+            </Field>
+          )}
           <Field label={t('contracts.fStart')}>
             <Input type="date" value={f.startDate} onChange={(e: any) => set('startDate', e.target.value)} />
           </Field>

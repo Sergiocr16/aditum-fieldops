@@ -60,12 +60,8 @@ export default function AdminDashboard({ ctx }: { ctx: AppCtx }) {
   const { tenant } = useTenant();
   // El dashboard refleja módulos de la empresa (features) + lo visible del usuario.
   const sees = (m: string) => canSeeModule(m, user?.roles, user?.modules, tenant?.features);
-  const showTickets = sees('tickets');
   const showMaintenance = sees('serviceOrders') || sees('contracts') || sees('equipment') || sees('calendar');
   const showBilling = sees('billing');
-  const tickets = ctx.db.tickets;
-  const c = statusCounts(tickets);
-  const recent = [...tickets].sort((a, b) => (b.created || '').localeCompare(a.created || '')).slice(0, 6);
 
   /* ---- mantenimiento: un solo rango cubre KPIs, próximas visitas y alertas ---- */
   const d = today();
@@ -82,16 +78,6 @@ export default function AdminDashboard({ ctx }: { ctx: AppCtx }) {
   const P = PERIODS.find((p) => p.key === period)!;
   const analyticsRange = useMemo(() => ({ from: addDays(d, -P.days), to: addDays(d, 7) }), [d, P.days]);
   const { orders: anOrders } = useServiceOrdersRange(analyticsRange.from, analyticsRange.to);
-  const periodTickets = useMemo(() => tickets.filter((t) => (t.created || '').slice(0, 10) >= analyticsRange.from), [tickets, analyticsRange.from]);
-
-  // gráficos de tickets
-  const chTicketStatus = useMemo(() => A.ticketsByStatus(tickets), [tickets]);
-  const chTicketPriority = useMemo(() => A.ticketsByPriority(tickets), [tickets]);
-  const chTicketTrend = useMemo(() => A.createdVsResolvedByWeek(periodTickets, P.weeks, d), [periodTickets, P.weeks, d]);
-  const chTicketTech = useMemo(() => A.ticketsByTech(tickets, ctx.db.technicians), [tickets, ctx.db.technicians]);
-  const kAvgRes = useMemo(() => A.avgResolutionDays(tickets), [tickets]);
-  const kFirstPass = useMemo(() => A.firstPassRate(tickets), [tickets]);
-
   // gráficos de mantenimiento
   const chSoStatus = useMemo(() => A.soByStatus(anOrders), [anOrders]);
   const chPrevCorr = useMemo(() => A.preventiveVsCorrectiveByMonth(anOrders, P.months, d, lang), [anOrders, P.months, d, lang]);
@@ -132,7 +118,7 @@ export default function AdminDashboard({ ctx }: { ctx: AppCtx }) {
     orders
       .filter((o) => ['SERVICIO_TERMINADO', 'PENDIENTE_FACTURAR', 'FACTURADA'].includes(o.status))
       .forEach((o) => {
-        (o.checklist || []).filter((it) => it.alert).forEach((it) => {
+        ((o.checklist || []) as any[]).filter((it) => it.alert).forEach((it: any) => {
           out.push({
             icon: 'alert',
             text: `${it.label}: ${it.answer ?? '—'} ${it.unit || ''}`.trim(),
@@ -170,7 +156,7 @@ export default function AdminDashboard({ ctx }: { ctx: AppCtx }) {
           <div className="dash-title">{t('dashboard.greeting')}{greeting ? ', ' + greeting : ''}</div>
         </div>
         <div className="dash-tools">
-          {(showMaintenance || showTickets || showBilling) && (
+          {(showMaintenance || showBilling) && (
             <div className="seg" role="tablist" aria-label={t('dashboard.charts.period')}>
               {PERIODS.map((p) => (
                 <button key={p.key} className={period === p.key ? 'on' : ''} onClick={() => setPeriod(p.key)}>
@@ -179,7 +165,6 @@ export default function AdminDashboard({ ctx }: { ctx: AppCtx }) {
               ))}
             </div>
           )}
-          {showTickets && <Button variant="gold" icon="plus" onClick={() => ctx.go('ticketForm', { mode: 'new' })}>{t('dashboard.createTicket')}</Button>}
           {showMaintenance && <Button variant="ghost" icon="zap" onClick={() => setCorrectiveOpen(true)}>{t('serviceOrders.newCorrective')}</Button>}
         </div>
       </div>
@@ -296,93 +281,6 @@ export default function AdminDashboard({ ctx }: { ctx: AppCtx }) {
               <ChartCard title={t('dashboard.charts.billing')} sub={chBilling.useAmount ? t('dashboard.charts.amount') : t('dashboard.charts.count')} height={220}>
                 {(pendingBilling.length || invoicedBilling.length) ? <StackedBars data={chBilling.data} series={[{ key: 'facturado', label: t('billing.facturado'), color: SERIES_COLORS.facturado }, { key: 'pendiente', label: t('billing.pendiente'), color: SERIES_COLORS.pendiente }]} /> : <ChartEmpty label={t('dashboard.charts.empty')} />}
               </ChartCard>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ---------- tickets ---------- */}
-      {showTickets && (
-        <section className="dash-section">
-          <SecHead title={t('dashboard.summaryByStatus')} meta={t('dashboard.charts.avgResolution') + ': ' + (kAvgRes === null ? '—' : kAvgRes + ' d')} />
-          <div className="kpi-row">
-            <Kpi accent label={t('dashboard.charts.openTickets')} value={A.ticketsOpenCount(tickets)} />
-            <Kpi label={t('dashboard.totalTickets')} value={c.total} dot={DOT.cerr} />
-            <Kpi label={t('dashboard.charts.avgResolution')} value={kAvgRes === null ? '—' : kAvgRes} suffix={kAvgRes === null ? '' : ' d'} dot={DOT.asig} />
-            <Kpi label={t('dashboard.charts.firstPass')} value={kFirstPass === null ? '—' : kFirstPass} suffix={kFirstPass === null ? '' : '%'} dot={DOT.apro} />
-          </div>
-
-          <div className="bento">
-            <div className="col-4">
-              <ChartCard title={t('dashboard.charts.ticketStatus')} height={210}>
-                {chTicketStatus.length ? <DonutChart data={chTicketStatus.map((x) => ({ ...x, label: t('status.' + x.key) }))} totalLabel={t('nav.tickets')} /> : <ChartEmpty label={t('dashboard.charts.empty')} />}
-              </ChartCard>
-            </div>
-            <div className="col-8">
-              <ChartCard title={t('dashboard.charts.createdVsResolved')} sub={t('dashboard.charts.byWeek')} height={210}>
-                {periodTickets.length ? <TrendChart data={chTicketTrend} series={[{ key: 'creados', label: t('dashboard.charts.created'), color: SERIES_COLORS.creados }, { key: 'resueltos', label: t('dashboard.charts.resolved'), color: SERIES_COLORS.resueltos }]} /> : <ChartEmpty label={t('dashboard.charts.empty')} />}
-              </ChartCard>
-            </div>
-            <div className="col-5">
-              <ChartCard title={t('dashboard.charts.ticketPriority')} height={200}>
-                {tickets.length ? <CategoryBars data={chTicketPriority.map((x) => ({ ...x, label: t('priority.' + x.key), color: PRIORITY_COLOR[x.key as keyof typeof PRIORITY_COLOR] }))} /> : <ChartEmpty label={t('dashboard.charts.empty')} />}
-              </ChartCard>
-            </div>
-            <div className="col-7">
-              <ChartCard title={t('dashboard.charts.ticketByTech')} height={200}>
-                {chTicketTech.length ? <CategoryBars data={chTicketTech} horizontal color="#002A42" /> : <ChartEmpty label={t('dashboard.charts.empty')} />}
-              </ChartCard>
-            </div>
-          </div>
-
-          <div className="panel">
-            <div className="panel-head">
-              <h3>{t('dashboard.recentTickets')}</h3>
-              <button className="link-more" onClick={() => ctx.go('tickets')}>{t('dashboard.viewAll')} <Icon name="chevronRight" size={15} /></button>
-            </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>{t('tickets.colNum')}</th>
-                    <th>{t('tickets.colTitle')}</th>
-                    <th>{t('tickets.colClient')}</th>
-                    <th>{t('tickets.colTech')}</th>
-                    <th>{t('tickets.colPriority')}</th>
-                    <th>{t('tickets.colStatus')}</th>
-                    <th>{t('tickets.colScheduled')}</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recent.map((tk) => {
-                    const tech = ctx.db.technicians.find((x) => x.id === tk.techId);
-                    return (
-                      <tr key={tk.id} onClick={() => ctx.go('ticketDetail', { id: tk.id })} style={{ cursor: 'pointer' }}>
-                        <td className="mono" style={{ color: 'var(--text-2)', fontWeight: 500 }}>{tk.num}</td>
-                        <td style={{ fontWeight: 600, maxWidth: 230 }}>
-                          <div className="truncate">{tk.title}</div>
-                        </td>
-                        <td style={{ color: 'var(--text-2)' }}>{tk.client}</td>
-                        <td>
-                          {tech ? (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-                              <Avatar initials={tech.initials} size={24} />
-                              {tech.name.split(' ')[0]}
-                            </span>
-                          ) : (
-                            <span style={{ color: 'var(--text-3)' }}>{t('common.unassigned')}</span>
-                          )}
-                        </td>
-                        <td><PriorityChip priority={tk.priority} /></td>
-                        <td><StatusBadge status={tk.status} size="sm" /></td>
-                        <td className="mono" style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{tk.scheduled}</td>
-                        <td><Icon name="chevronRight" size={16} style={{ color: 'var(--text-3)' }} /></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
             </div>
           </div>
         </section>

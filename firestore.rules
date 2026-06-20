@@ -133,10 +133,13 @@ service cloud.firestore {
           && request.resource.data.status == 'EN_PROGRESO'
           && request.resource.data.num == resource.data.num
           && request.resource.data.billingApplied == resource.data.billingApplied
+          && request.resource.data.materialsApplied == resource.data.materialsApplied
           && request.resource.data.scheduledDate == resource.data.scheduledDate
-          // El técnico solo llena ejecución; start/finish van por callable (Admin SDK).
+          // El técnico solo llena ejecución (plantilla, evidencia libre, visitas, materiales);
+          // start/finish/revisión van por callable (Admin SDK). Bloquea inyección de num,
+          // status, approval, billing/materialsApplied u otros campos arbitrarios.
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['checklist','photos','observations'])
+               .hasOnly(['checklist','photos','evidence','visits','materials','materialsNote','observations','techObs','readyAt'])
         );
       }
       // Disponibilidad/bloqueos: los gestiona admin/coordinador. El técnico solo

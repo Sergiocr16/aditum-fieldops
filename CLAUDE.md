@@ -4,10 +4,19 @@ Instrucciones para cualquier sesión de Claude Code en este repositorio. © Adit
 
 ## Qué es
 
-**Aditum FieldOps** — plataforma web de gestión de tickets de mantenimiento / trabajo técnico en sitio,
-con evidencias (fotos, PDF, video), link público de solo lectura para clientes, y un módulo Wiki de
-documentación. Dos roles: **admin** (escritorio) y **técnico** (móvil). Idioma ES/EN. Hecho para Aditum
-(control de acceso en Costa Rica).
+**Aditum FieldOps** — plataforma web de gestión de **órdenes de servicio** (mantenimiento / trabajo
+técnico en sitio), con evidencias (fotos, PDF, video), link público de solo lectura para clientes, y un
+módulo Wiki de documentación. Multi-tenant. Dos roles: **admin** (escritorio) y **técnico** (móvil)
+— más roles de escritorio `coordinador` y `facturacion`. Idioma ES/EN. Hecho para Aditum (control de
+acceso en Costa Rica).
+
+> **Modelo unificado (importante).** Antes existían dos entidades: *órdenes de trabajo* (`tickets`) y
+> *órdenes de servicio* (`serviceOrders`). Hoy **todo es una sola "Orden"** (`serviceOrders`), con una
+> `mode`: **`periodico`** (mantenimiento programado por contrato/equipos, lo genera el scheduler) o
+> **`demanda`** (trabajo puntual, ex orden de trabajo: cliente texto libre, checklist ad-hoc, sin equipo
+> obligatorio). El módulo `tickets` se quitó de la UI/config; la colección `tickets`, `getPublicTicket`,
+> `onTicketWritten` y la ruta pública `/p/:token` **se conservan** solo para que los links viejos sigan
+> abriendo (migración: `seed/migrate-tickets-to-orders.mjs`).
 
 ## Producción
 
@@ -28,8 +37,8 @@ documentación. Dos roles: **admin** (escritorio) y **técnico** (móvil). Idiom
 - **shared/**: lógica común (validación, numeración de tickets, tipos) consumida por `functions/` y `mcp/`
   como dependencia `file:` (`@aditum/fieldops-shared`). **Tras editar `shared/`, recompilarlo**
   (`npm --prefix shared run build`).
-- **mcp/**: servidor MCP (stdio) que crea/gestiona tickets y wiki en producción vía Admin SDK.
-- **seed/**: script de admin inicial + datos demo.
+- **mcp/**: servidor MCP (stdio) que crea/gestiona órdenes/wiki/inventario/fiscal en producción vía Admin SDK.
+- **seed/**: admin inicial (`seed.mjs`), datos demo (`demo.mjs`) y migraciones (`migrate-*.mjs`).
 
 ## Comandos
 
@@ -44,9 +53,16 @@ npm --prefix web run build                              # genera web/dist (usa w
 npm --prefix shared run build && npm --prefix functions run build
 npx firebase-tools@13 emulators:start --only auth,functions,firestore,storage --project demo-aditum-fieldops
 
-# Seed (emuladores)
+# Seed (emuladores): base (admin + técnicos) y luego datos demo del modelo unificado
 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
   FIREBASE_PROJECT_ID=demo-aditum-fieldops node seed/seed.mjs
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
+  FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:9199 FIREBASE_PROJECT_ID=demo-aditum-fieldops \
+  BASE_HOST=localhost node seed/demo.mjs   # contratos (periódico/quincenal/demanda), equipos, órdenes multi-equipo, fichaje
+
+# Migraciones (idempotentes; correr en prod ANTES de desplegar el modelo unificado)
+#   seed/migrate-tickets-to-orders.mjs      tickets -> serviceOrders (mode=demanda)
+#   seed/migrate-orders-multiequipment.mjs  single -> equipments[]; cadencia a contrato; limpia eq_* PROGRAMADA
 
 # Deploy a producción (el SA debe ser Owner para las Functions)
 export GOOGLE_APPLICATION_CREDENTIALS="$PWD/secrets/service-account.json"
@@ -66,45 +82,30 @@ npm --prefix mcp run build                       # se usa vía .mcp.json (server
 - Si una callable queda con **CORS** tras deploy (invoker no aplicado), borrá y recreá:
   `npx firebase-tools@13 functions:delete <fn> --region us-central1 --force` y volvé a desplegar.
 
-## Modelo de datos (Firestore)
+## Modelo de datos (Firestore, multi-tenant: todo bajo `tenants/{tid}/...`)
 
-- `users/{uid}`: name, email, role, phone, active, initials, createdAt. (Solo se escribe vía Functions.)
-- `tickets/{id}`: num (AD-####), title, client, site, address, priority, status, techId, fechas,
-  description/instructions/expected/doneConditions/observations/evidenceReq, techObs, readyAt,
-  `checklist[]`, `evidence[]`, `history[]`, `comments[]`, `approval?`, `share{token,active,...}`.
-  Trabajos de varios días: `visits[]` (`{id,date,techId,techName,note,hours}`) — una orden con varias
-  visitas (un día = una visita). Cada `evidence[]` y cada `checklist[]` lleva `visitId` (a qué día
-  pertenece la foto / en qué visita se completó el ítem). `techNote` queda legacy; el "qué se hizo" vive
-  en `visits[].note`.
-- `counters/tickets`: contador atómico para `num`.
-- `wikiCategories/{id}`, `wikiPages/{id}` (status DRAFT|PUBLISHED|INACTIVE, contentMarkdown, attachments[]).
-- `inventory/{id}` (name, quantity, minQty, purchaseLink, description, nameKey) + `inventoryMovements/{id}`
-  (historial de consumo: productId, qty, ticketNum, client, site, techName, at).
-- `tickets` también: `materials[]` ({productId,name,qty,comment}), `materialsNote`, `materialsApplied`.
-
-Estados de ticket: pendiente, asignado, en_proceso, listo_revision, aprobado, rechazado, cerrado.
+- `users/{uid}`: name, email, role(`roles[]`), phone, active, initials, modules?. (Solo se escribe vía Functions.)
+- **`serviceOrders/{id}`** — la entidad central ("Orden"). Campos:
+  - `num`, `type` (`preventivo|correctivo`), **`mode`** (`periodico|demanda`), `status`, `techId`, `client{name,email,phone}`, fechas (`planDate/scheduledDate/scheduledTime`), `notify{}`, `skipNotice`.
+  - **Multi-equipo**: `equipments[]` = `{equipmentId, equipmentSnapshot{typeId,typeName,brand,model,serial,location}, checklistTemplateId, checklistTemplateVersion, checklist:SOChecklistEntry[]}` — una orden agrupa **todos los equipos** del contrato; cada equipo trae su checklist de plantilla (se carga al **iniciar**). (Campos legacy single `equipmentId/equipmentSnapshot/checklist` se conservan; usar el helper `soEquipments(so)` para leer.)
+  - **Demanda** (ex OT): `title/site/address/priority/description`, `checklist[]` ad-hoc (`{text,done}`), `evidence[]` (img/video/pdf), `materials[]/materialsNote/materialsApplied`, `requiresReview`, `approval?`, `comments[]`.
+  - **Trabajo por día**: `visits[]` = `{id,date,techId,techName,note,segments[],hours}`. **Fichaje**: `segments[]` = `{start,end}` (tramos iniciar→salir; `end:null` = en curso); `hours` = total del día (recalculado al cerrar). Cada `evidence[]`/`checklist[]` lleva `visitId`.
+  - `signature?`, `photos[]`, `observations`, `reportShare{token,active,...}`, billing (`requiresInvoice/chargeTypeId/clientId/billAmount/billCurrency/billingApplied/invoiceItemId`), `cadenceApplied`, `history[]`.
+- **Estados** (`SO_TRANSITIONS` en `shared`): `PROGRAMADA → NOTIFICADA → CONFIRMADA/REAGENDADA → EN_PROGRESO → SERVICIO_TERMINADO → [EN_REVISION] → PENDIENTE_FACTURAR → FACTURADA → CERRADA` (+ `CANCELADA`). `EN_REVISION` es la compuerta de aprobación interna (default en demanda; `requiresReview`).
+- `contracts/{id}`: `num`, `licitacionNum` (Nº licitación **o** contrato), `clientName/Email/Phone`, **`modality`** (`periodico|demanda`), `defaultPeriodicityMonths` (1/2/3/6/12 **y `0.5` = quincenal**), `defaultTechId`, `noticeDaysBefore`, `nextScheduledDate`/`lastServiceDate` (**cadencia a nivel contrato**), `active`.
+- `equipment/{id}`: `contractId, typeId, brand, model, serial, location, active`. (La periodicidad por equipo ya **no** se usa — la cadencia es del contrato.)
+- `equipmentTypes/{id}` (`activeTemplateVersion`) + `checklistTemplates/{typeId}_v{n}` (plantilla de checklist por tipo).
+- `counters/{serviceOrders|contracts|...}`: contadores atómicos. Numeración por contrato: `co_{contractId}_{YYYYMMDD}` (id determinístico, scheduler idempotente).
+- `wikiCategories/{id}`, `wikiPages/{id}`; `inventory/{id}` + `inventoryMovements/{id}`; cola fiscal `invoiceItems/{id}`, `invoices/{id}`, `clients/{id}`, `chargeTypes/{id}` (GTI).
 
 **Comportamientos clave:**
-- Técnico: contraseña **auto-generada y oculta** en el formulario; se muestra en la tarjeta de
-  credenciales al crear; acción **Regenerar contraseña** (`resetTechnicianPassword`).
-- Link público: `getPublicTicket` muestra el reporte si el link está **activo** (no exige un estado
-  concreto del ticket); valida token + expiración y devuelve un DTO **saneado** (incluye `visits[]` y la
-  `visitId` de cada evidencia para el desglose por día).
-- Trabajos de varios días: **una sola orden con `visits[]`** (estándar FSM, no órdenes enlazadas). El
-  técnico registra "trabajo por día" (nota + fotos por visita) en `screens/mobile/MobileTicket.tsx`;
-  la orden queda abierta entre días. **Una factura, un reporte, checklist único** marcado entre días.
-  UI consistente con el acordeón compartido `web/src/components/visits.tsx` (`VisitBar`/`VisitDayChip`)
-  en móvil, detalle admin y reporte público.
-- Notificaciones: `onTicketWritten` (trigger Firestore + `functions/src/notifications.ts`, Gmail SMTP)
-  envía correos en asignación, listo-para-revisión (→ `ADMIN_NOTIFY_EMAIL`), rechazo y aprobación.
-  Secrets `SMTP_USER`/`SMTP_PASS`. Remitente `SMTP_FROM` (service@aditumcr.com).
-- Compartir reporte: callable `sharePublicLink` (admin) envía el link público por correo (con CC).
-- Recuperar contraseña (self-service): enlace en el login → callable `requestPasswordReset`
-  (anti-enumeración, correo branded del tenant) → página propia `/reset?oobCode=...`
-  (`screens/public/PublicReset.tsx`). No usa la pantalla genérica de Firebase.
-- Inventario: el técnico reporta `materials` en el ticket; el stock se rebaja **solo al aprobar**, dentro
-  de `onTicketWritten` (transacción idempotente con flag `materialsApplied`) y crea `inventoryMovements`.
-  Tools MCP: `inventory_list/low_stock/upsert/adjust/delete/movements`. El consumo NO va al link público.
+- **Scheduler** (`functions/src/scheduler.ts`): por contrato `periodico` activo, genera **una orden** con `equipments[]` de todos los equipos según la periodicidad del contrato (`addPeriodCR`: `<1` mes = +15 días). Ignora contratos `demanda`.
+- **Ciclo orden** (`functions/src/serviceOrders.ts`, trigger `onServiceOrderWritten` + callables `startServiceOrder`/`completeServiceOrder`/`requestServiceReview`/`approveServiceOrder`/`rejectServiceOrder`): `start` bindea la plantilla de cada equipo; `complete` valida el checklist de **todos** los equipos + firma; el trigger maneja revisión interna (`EN_REVISION`), reporte público, rebaje de inventario (idempotente `materialsApplied`), `invoiceItem` (un item por orden, resumen multi-equipo) y **recálculo de cadencia a nivel contrato**.
+- **Fichaje de horas** (solo demanda): el técnico hace **Iniciar trabajo / Salir del sitio** por día (varias sesiones); contador en vivo. Total por orden en detalle/reporte; **Reporte de horas** global (`HoursReport.tsx`) por técnico y rango. Helpers `minutesBetween/visitWorkedMinutes/fmtDuration` (en `shared` y `web/src/lib/time.ts`).
+- **Link público**: `getPublicServiceReport` (`/r/:token`) muestra el reporte saneado (equipos+checklists, visitas con horas por día, evidencia, firma). El consumo de inventario **no** va al público. `/p/:token` (`getPublicTicket`) se conserva para tickets viejos.
+- **Notificaciones** (`functions/src/notifications.ts`, Gmail SMTP, secrets `SMTP_USER`/`SMTP_PASS`): asignación, confirmación/reagenda, listo-para-revisión (→ tenant `notifyEmail`), aprobación/rechazo, reporte al cliente.
+- Técnico: contraseña auto-generada; **Regenerar contraseña** (`resetTechnicianPassword`). Recuperación self-service (`requestPasswordReset` → `/reset`).
+- UI de visitas/equipos: acordeón compartido `web/src/components/visits.tsx` (`VisitBar`/`VisitDayChip`); editor de checklist compartido `web/src/components/ChecklistEditor.tsx`; normalización multi-equipo `soEquipments()` (en `shared` y `web/src/lib/serviceOrders.ts`).
 
 ## Reglas que DEBES seguir
 
@@ -125,8 +126,9 @@ Ver `.claude/rules/`. En resumen:
 ## Cómo agregar cosas (atajos)
 
 - **Nueva pantalla** → skill `/add-screen`.
-- **Nuevo campo de ticket** (end-to-end) → skill `/add-ticket-field`.
-- **Claves de traducción** → skill `/add-i18n-keys`.
+- **Nuevo campo de orden** (end-to-end) → skill `/add-ticket-field` (aplica al modelo `serviceOrders`).
+- **Claves de traducción** → skill `/add-i18n-keys` (siempre ES **y** EN).
 - **Deploy** → skill `/deploy-fieldops`.
+- **Tras tocar `shared/src/index.ts`**: recompilar (`npm --prefix shared run build`) y **vendorizar** a `functions/src/shared.ts`.
 - **Nueva Cloud Function**: agrégala en `functions/src/index.ts`, valida `request.auth` + claim de rol.
-- **Crear tickets/wiki desde Claude** → MCP `aditum-fieldops` (ver README, sección MCP).
+- **Crear órdenes/wiki desde Claude** → MCP `aditum-fieldops` (ver README, sección MCP).

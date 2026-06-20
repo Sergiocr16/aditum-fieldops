@@ -7,7 +7,7 @@ import { useTenant } from './tenant';
 import { now, today } from './time';
 import type { Contract, PeriodicityMonths } from './types';
 
-export const PERIODICITY_OPTIONS: PeriodicityMonths[] = [1, 2, 3, 6, 12];
+export const PERIODICITY_OPTIONS: PeriodicityMonths[] = [0.5, 1, 2, 3, 6, 12];
 
 export function useContracts() {
   const { user } = useAuth();
@@ -51,6 +51,7 @@ export function useContracts() {
           clientName: data.clientName || '',
           clientEmail: data.clientEmail || '',
           clientPhone: data.clientPhone || '',
+          modality: data.modality || 'periodico',
           startDate: data.startDate || today(),
           endDate: data.endDate || '',
           defaultPeriodicityMonths: data.defaultPeriodicityMonths || 3,

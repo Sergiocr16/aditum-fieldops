@@ -17,6 +17,7 @@ export const ICONS: Record<string, string> = {
   filter: 'M22 3H2l8 9.46V19l4 2v-8.54L22 3Z',
   check: 'M20 6 9 17l-5-5',
   checkCircle: 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4 12 14.01l-3-3',
+  circle: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
   x: 'M18 6 6 18M6 6l12 12',
   xCircle: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM15 9l-6 6M9 9l6 6',
   clock: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM12 6v6l4 2',

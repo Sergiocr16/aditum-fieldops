@@ -7,7 +7,7 @@ import { useTenant } from '../../lib/tenant';
 import { TENANT_FEATURES, type TenantFeature } from '../../lib/modules';
 import { Icon, Toggle, toast } from '../../components/ui';
 
-const FEATURE_ICON: Record<TenantFeature, string> = { tickets: 'clipboard', maintenance: 'wrench', inventory: 'box', wiki: 'book', fiscal: 'receipt' };
+const FEATURE_ICON: Record<TenantFeature, string> = { maintenance: 'wrench', inventory: 'box', wiki: 'book', fiscal: 'receipt' };
 
 export default function TenantFeatures() {
   const { t } = useTranslation();

@@ -10,6 +10,7 @@ import type { AppCtx } from '../../lib/ctx';
 
 export function perLabel(t: any, months: number | null | undefined): string {
   if (!months) return '—';
+  if (months < 1) return t('contracts.per_quincenal'); // 0.5 = quincenal ('per_0.5' chocaría con el separador '.' de i18next)
   return t('contracts.per_' + months);
 }
 

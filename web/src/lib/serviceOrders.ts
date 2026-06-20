@@ -10,6 +10,22 @@ import type { ServiceOrder, ServiceOrderStatus } from './types';
 
 export const SO_BUSY: ServiceOrderStatus[] = ['PROGRAMADA', 'NOTIFICADA', 'CONFIRMADA', 'REAGENDADA', 'EN_PROGRESO'];
 
+/** Normaliza la lectura multi-equipo: usa `equipments[]`; si no, sintetiza uno desde
+    los campos legacy (orden vieja de un equipo). Demanda → []. */
+export function soEquipments(so: any): import('./types').SOEquipment[] {
+  if (Array.isArray(so?.equipments) && so.equipments.length) return so.equipments;
+  if (so?.equipmentSnapshot) {
+    return [{
+      equipmentId: so.equipmentId || '',
+      equipmentSnapshot: so.equipmentSnapshot,
+      checklistTemplateId: so.checklistTemplateId ?? null,
+      checklistTemplateVersion: so.checklistTemplateVersion ?? null,
+      checklist: (so.checklist as any) || [],
+    }];
+  }
+  return [];
+}
+
 function mapDocs(snap: any): ServiceOrder[] {
   const list = snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) })) as ServiceOrder[];
   list.sort((a, b) => (a.scheduledDate + (a.scheduledTime || '')).localeCompare(b.scheduledDate + (b.scheduledTime || '')));
@@ -123,11 +139,10 @@ export function useServiceOrderActions() {
   const by = (user?.role === 'admin' ? 'Admin · ' : '') + (user?.name || '');
 
   return useMemo(() => ({
-    /** Crea una OS correctiva manual (numeración atómica client-side, patrón tickets). */
+    /** Crea una OS correctiva manual con uno o varios equipos (numeración atómica client-side). */
     createCorrective: async (data: {
       contractId: string;
-      equipmentId: string;
-      equipmentSnapshot: any;
+      equipments: { equipmentId: string; equipmentSnapshot: any }[];
       client: { name: string; email: string; phone: string };
       techId: string | null;
       scheduledDate: string;
@@ -152,10 +167,18 @@ export function useServiceOrderActions() {
         tx.set(ref, {
           num: prefix + '-' + next,
           type: 'correctivo',
+          mode: 'periodico',
           status: 'PROGRAMADA',
           contractId: data.contractId,
-          equipmentId: data.equipmentId,
-          equipmentSnapshot: data.equipmentSnapshot,
+          equipmentId: data.equipments[0]?.equipmentId || null,
+          equipmentSnapshot: data.equipments[0]?.equipmentSnapshot || null,
+          equipments: data.equipments.map((e) => ({
+            equipmentId: e.equipmentId,
+            equipmentSnapshot: e.equipmentSnapshot,
+            checklistTemplateId: null,
+            checklistTemplateVersion: null,
+            checklist: [],
+          })),
           client: data.client,
           techId: data.techId || null,
           planDate: data.scheduledDate,
@@ -187,8 +210,133 @@ export function useServiceOrderActions() {
       return { id: ref.id, num };
     },
 
+    /** Crea una ORDEN POR DEMANDA (ex orden de trabajo): contrato/equipo opcionales,
+        cliente como texto libre, checklist ad-hoc, revisión interna por defecto.
+        Numeración atómica client-side (mismo counter/prefijo que las OS). */
+    createDemand: async (data: {
+      title?: string;
+      client: { name: string; email?: string; phone?: string };
+      site?: string;
+      address?: string;
+      priority?: string;
+      techId: string | null;
+      scheduledDate: string;
+      scheduledTime?: string;
+      contractId?: string | null;
+      equipmentId?: string | null;
+      equipmentSnapshot?: any;
+      description?: string;
+      instructions?: string;
+      expected?: string;
+      doneConditions?: string;
+      evidenceReq?: string;
+      checklistItems?: string[];
+      requiresReview?: boolean;
+      requiresInvoice?: boolean;
+      chargeTypeId?: string | null;
+      clientId?: string | null;
+      billAmount?: number | null;
+      billCurrency?: 'CRC' | 'USD';
+      notes?: string;
+    }): Promise<{ id: string; num: string }> => {
+      const prefix = tenant?.numbering?.osPrefix || 'OS';
+      const ref = doc(tcol('serviceOrders'));
+      const ts = now();
+      const adhoc = (data.checklistItems || [])
+        .map((s) => (s || '').trim())
+        .filter(Boolean)
+        .map((text, i) => ({ id: `c${i}-${Math.random().toString(36).slice(2, 8)}`, text, done: false, by: null, at: null, visitId: null }));
+      const num = await runTransaction(db, async (tx) => {
+        const counterRef = tdoc('counters', 'serviceOrders');
+        const cs = await tx.get(counterRef);
+        const next = (cs.exists() ? (cs.data() as any).value : 1000) + 1;
+        tx.set(counterRef, { value: next }, { merge: true });
+        tx.set(ref, {
+          num: prefix + '-' + next,
+          type: 'correctivo',
+          mode: 'demanda',
+          status: 'PROGRAMADA',
+          contractId: data.contractId || null,
+          equipmentId: data.equipmentId || null,
+          equipmentSnapshot: data.equipmentSnapshot || null,
+          client: { name: data.client.name, email: data.client.email || '', phone: data.client.phone || '' },
+          techId: data.techId || null,
+          planDate: data.scheduledDate,
+          scheduledDate: data.scheduledDate,
+          scheduledTime: data.scheduledTime || '08:00',
+          durationMin: 60,
+          skipNotice: true,
+          notify: { noticeDaysBefore: 3, noticeDate: data.scheduledDate, noticeSentAt: null, reminderSentAt: null, confirmedAt: null, confirmedVia: null, rescheduleCount: 0, tokens: { confirm: null, reschedule: null } },
+          hold: null,
+          checklistTemplateId: null,
+          checklistTemplateVersion: null,
+          checklist: adhoc,
+          photos: [],
+          evidence: [],
+          visits: [],
+          observations: '',
+          notes: data.notes || '',
+          signature: null,
+          startedAt: null,
+          finishedAt: null,
+          reportShare: { active: false, token: null, url: null, created: null, lastVisit: null },
+          title: data.title || '',
+          site: data.site || '',
+          address: data.address || '',
+          priority: data.priority || 'media',
+          description: data.description || '',
+          instructions: data.instructions || '',
+          expected: data.expected || '',
+          doneConditions: data.doneConditions || '',
+          evidenceReq: data.evidenceReq || '',
+          techObs: '',
+          readyAt: null,
+          requiresReview: data.requiresReview ?? true,
+          approval: null,
+          comments: [],
+          materials: [],
+          materialsNote: '',
+          materialsApplied: false,
+          requiresInvoice: !!data.requiresInvoice,
+          chargeTypeId: data.chargeTypeId || null,
+          clientId: data.clientId || null,
+          billAmount: data.billAmount ?? null,
+          billCurrency: data.billCurrency || 'CRC',
+          billingApplied: false,
+          invoiceItemId: null,
+          cadenceApplied: false,
+          history: [{ status: 'PROGRAMADA', at: ts, by }],
+          created: ts,
+          createdBy: user?.uid || '',
+        });
+        return prefix + '-' + next;
+      });
+      return { id: ref.id, num };
+    },
+
     update: async (id: string, patch: Partial<ServiceOrder>) => {
       await updateDoc(tdoc('serviceOrders', id), patch as any);
+    },
+
+    /** Técnico/admin finaliza una orden por demanda (sin firma) → revisión interna. */
+    requestReview: async (id: string) => {
+      const fn = httpsCallable(functions, 'requestServiceReview');
+      const res: any = await fn({ serviceOrderId: id });
+      return res.data as { ok: boolean };
+    },
+
+    /** Admin aprueba una orden EN_REVISION → facturar/cerrar. */
+    approve: async (id: string, comment?: string) => {
+      const fn = httpsCallable(functions, 'approveServiceOrder');
+      const res: any = await fn({ serviceOrderId: id, comment });
+      return res.data as { ok: boolean; status: string };
+    },
+
+    /** Admin rechaza una orden EN_REVISION → vuelve a EN_PROGRESO. */
+    reject: async (id: string, comment: string) => {
+      const fn = httpsCallable(functions, 'rejectServiceOrder');
+      const res: any = await fn({ serviceOrderId: id, comment });
+      return res.data as { ok: boolean };
     },
 
     /** Editar / reprogramar / reasignar (admin, escritura directa con history). */

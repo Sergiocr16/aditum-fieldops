@@ -11,18 +11,20 @@ import type { ServiceOrder } from '../../lib/types';
 function SOCard({ o, onClick }: { o: ServiceOrder; onClick: () => void }) {
   const { t } = useTranslation();
   const eq = o.equipmentSnapshot || ({} as any);
+  const isDemand = (o.mode || 'periodico') === 'demanda';
+  const eqCount = (o.equipments?.length || (o.equipmentSnapshot ? 1 : 0));
   const overdue = o.scheduledDate < today() && ['PROGRAMADA', 'NOTIFICADA', 'CONFIRMADA', 'REAGENDADA'].includes(o.status);
   return (
     <button onClick={onClick} className="m-ticket-card">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <span className="mono" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-2)' }}>{o.num}</span>
         <span className="badge" style={{ fontSize: 11 }}>
-          <Icon name={o.type === 'correctivo' ? 'zap' : 'refresh'} size={11} />
-          {t('serviceOrders.type_' + o.type)}
+          <Icon name={isDemand ? 'zap' : 'refresh'} size={11} />
+          {isDemand ? t('serviceOrders.mode_demanda') : t('serviceOrders.type_' + o.type)}
         </span>
       </div>
       <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.3, marginBottom: 8, color: 'var(--text)', textAlign: 'left' }}>
-        {[eq.typeName, eq.brand].filter(Boolean).join(' · ') || t('serviceOrders.title')}
+        {(isDemand ? o.title : (eqCount > 1 ? t('serviceOrders.nEquipment', { count: eqCount }) : [eq.typeName, eq.brand].filter(Boolean).join(' · '))) || t('serviceOrders.title')}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 12 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13.5, color: 'var(--text-2)' }}>
@@ -31,7 +33,7 @@ function SOCard({ o, onClick }: { o: ServiceOrder; onClick: () => void }) {
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13.5, color: 'var(--text-2)' }}>
           <Icon name="mapPin" size={15} style={{ flex: 'none', color: 'var(--text-3)' }} />
-          {eq.location || '—'}
+          {eq.location || o.site || '—'}
         </span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: 11 }}>

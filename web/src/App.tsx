@@ -15,11 +15,6 @@ import Login from './screens/Login';
 import AdminShell from './screens/admin/AdminShell';
 import AdminDashboard from './screens/admin/Dashboard';
 import TechniciansScreen from './screens/admin/Technicians';
-import TicketsList from './screens/admin/TicketsList';
-import TicketForm from './screens/admin/TicketForm';
-import TicketDetailAdmin from './screens/admin/TicketDetail';
-import { ApproveModal, RejectModal, ReassignModal } from './screens/admin/modals';
-import { approveTicket, rejectTicket, reassignTicket, generateLink } from './lib/actions';
 import WikiListAdmin from './screens/admin/WikiList';
 import WikiEditor from './screens/admin/WikiEditor';
 import Inventory from './screens/admin/Inventory';
@@ -49,8 +44,8 @@ import PublicReset from './screens/public/PublicReset';
 import MobileAvailability from './screens/mobile/MobileAvailability';
 import NotifySettings from './screens/admin/NotifySettings';
 import ServiceCalendar from './screens/admin/ServiceCalendar';
+import HoursReport from './screens/admin/HoursReport';
 import TechDashboard from './screens/mobile/MobileDashboard';
-import TechTicketDetail from './screens/mobile/MobileTicket';
 import { TechWikiList, TechWikiPage } from './screens/mobile/MobileWiki';
 import PublicView from './screens/public/PublicView';
 
@@ -69,12 +64,11 @@ function AuthedApp() {
   const { tenant } = useTenant();
   const data = useData();
   const desktopRole = user!.role === 'admin' || user!.role === 'coordinador' || user!.role === 'facturacion';
-  // Técnico: si la empresa no usa tickets, su home es órdenes de servicio.
-  const techHome = tenantHasFeature('tickets', tenant?.features) ? 'techDashboard' : (tenantHasFeature('maintenance', tenant?.features) ? 'techOrders' : 'techDashboard');
+  // Técnico: su home es la bandeja de órdenes de servicio (o el dashboard si no hay mantenimiento).
+  const techHome = tenantHasFeature('maintenance', tenant?.features) ? 'techOrders' : 'techDashboard';
   const [route, setRoute] = useState(desktopRole ? 'dashboard' : techHome);
   const [params, setParams] = useState<any>({});
   const [hist, setHist] = useState<{ route: string; params: any }[]>([]);
-  const [listModal, setListModal] = useState<any>(null);
 
   const ctx: AppCtx = useMemo(
     () => ({
@@ -140,11 +134,7 @@ function AuthedApp() {
     }
     let inner: React.ReactNode = null;
     if (route === 'dashboard') inner = <AdminDashboard ctx={ctx} />;
-    else if (route === 'tickets')
-      inner = <TicketsList ctx={ctx} onApprove={(t) => setListModal({ type: 'approve', t })} onReject={(t) => setListModal({ type: 'reject', t })} onReassign={(t) => setListModal({ type: 'reassign', t })} />;
     else if (route === 'technicians') inner = <TechniciansScreen ctx={ctx} openCreate={params.create} />;
-    else if (route === 'ticketForm') inner = <TicketForm ctx={ctx} mode={params.mode} id={params.id} />;
-    else if (route === 'ticketDetail') inner = <TicketDetailAdmin ctx={ctx} id={params.id} />;
     else if (route === 'wiki') inner = <WikiListAdmin ctx={ctx} />;
     else if (route === 'wikiForm') inner = <WikiEditor ctx={ctx} mode={params.mode} id={params.id} />;
     else if (route === 'inventory') inner = <Inventory ctx={ctx} />;
@@ -166,22 +156,17 @@ function AuthedApp() {
     else if (route === 'chargeTypes') inner = <ChargeTypes ctx={ctx} />;
     else if (route === 'notifySettings') inner = <NotifySettings ctx={ctx} />;
     else if (route === 'calendar') inner = <ServiceCalendar ctx={ctx} />;
+    else if (route === 'hoursReport') inner = <HoursReport ctx={ctx} />;
     return (
-      <>
-        <AdminShell ctx={ctx} route={route}>
-          {inner}
-        </AdminShell>
-        {listModal?.type === 'approve' && <ApproveModal open onClose={() => setListModal(null)} onConfirm={(c: string) => { approveTicket(ctx, listModal.t, c); setListModal(null); }} />}
-        {listModal?.type === 'reject' && <RejectModal open onClose={() => setListModal(null)} onConfirm={(c: string) => { rejectTicket(ctx, listModal.t, c); setListModal(null); }} />}
-        {listModal?.type === 'reassign' && <ReassignModal open ticket={listModal.t} ctx={ctx} onClose={() => setListModal(null)} onConfirm={(tid: string) => { reassignTicket(ctx, listModal.t, tid); setListModal(null); }} />}
-      </>
+      <AdminShell ctx={ctx} route={route}>
+        {inner}
+      </AdminShell>
     );
   }
 
   // technician (mobile, full screen)
   let techScreen: React.ReactNode;
-  if (route === 'techTicket') techScreen = <TechTicketDetail ctx={ctx} id={params.id} />;
-  else if (route === 'techWiki') techScreen = <TechWikiList ctx={ctx} />;
+  if (route === 'techWiki') techScreen = <TechWikiList ctx={ctx} />;
   else if (route === 'techWikiPage') techScreen = <TechWikiPage ctx={ctx} id={params.id} />;
   else if (route === 'techOrders') techScreen = <MobileServiceOrders ctx={ctx} />;
   else if (route === 'techCalendar') techScreen = <MobileCalendar ctx={ctx} />;

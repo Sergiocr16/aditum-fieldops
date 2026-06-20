@@ -21,7 +21,6 @@ const SO_DOT = 'var(--gold)';
 export default function MobileCalendar({ ctx }: { ctx: AppCtx }) {
   const { t, i18n } = useTranslation();
   const { tenant } = useTenant();
-  const featTickets = tenantHasFeature('tickets', tenant?.features);
   const featMaint = tenantHasFeature('maintenance', tenant?.features);
   const techCanEditAvail = tenant?.techEditAvailability === true;
   const { orders } = useMyServiceOrders();
@@ -32,22 +31,16 @@ export default function MobileCalendar({ ctx }: { ctx: AppCtx }) {
   const byDate = useMemo(() => {
     const m = new Map<string, Item[]>();
     const push = (it: Item) => { if (it.date) m.set(it.date, [...(m.get(it.date) || []), it]); };
-    if (featTickets) {
-      for (const tk of ctx.db.tickets) {
-        if (!tk.scheduled) continue;
-        push({ kind: 'ticket', id: tk.id, date: tk.scheduled.slice(0, 10), time: '', num: tk.num, title: tk.title, sub: tk.site || tk.client, status: tk.status });
-      }
-    }
     if (featMaint) {
       for (const o of orders) {
         if (o.status === 'CANCELADA' || !o.scheduledDate) continue;
         const eq = o.equipmentSnapshot || ({} as any);
-        push({ kind: 'so', id: o.id, date: o.scheduledDate, time: o.scheduledTime || '', num: o.num, title: [eq.typeName, eq.brand].filter(Boolean).join(' · ') || o.num, sub: o.client?.name || '', status: o.status });
+        push({ kind: 'so', id: o.id, date: o.scheduledDate, time: o.scheduledTime || '', num: o.num, title: [eq.typeName, eq.brand].filter(Boolean).join(' · ') || o.title || o.num, sub: o.client?.name || '', status: o.status });
       }
     }
     for (const list of m.values()) list.sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
     return m;
-  }, [ctx.db.tickets, orders, featTickets, featMaint]);
+  }, [orders, featMaint]);
 
   const weeks = useMemo(() => monthMatrix(month), [month]);
   const dows = weekdayShort(i18n.language);
@@ -114,7 +107,6 @@ export default function MobileCalendar({ ctx }: { ctx: AppCtx }) {
 
         {/* Leyenda */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 12, color: 'var(--text-3)' }}>
-          {featTickets && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 99, background: TICKET_DOT }} />{t('nav.ticketsShort')}</span>}
           {featMaint && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 99, background: SO_DOT }} />{t('mobileOrders.navShort')}</span>}
         </div>
 

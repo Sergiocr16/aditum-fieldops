@@ -285,12 +285,7 @@ export default function BillingInbox({ ctx }: { ctx: AppCtx }) {
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
                         {tab === 'pendiente' && <Button size="sm" variant="gold" icon="receipt" onClick={() => billItems([i.id])}>{t('billing.bill')}</Button>}
                         {i.serviceOrderId && (
-                          <button className="icon-btn" style={{ width: 30, height: 30 }} title={t('serviceOrders.title')} onClick={() => ctx.go('soDetail', { id: i.serviceOrderId })}>
-                            <Icon name="external" size={14} />
-                          </button>
-                        )}
-                        {i.ticketId && (
-                          <button className="icon-btn" style={{ width: 30, height: 30 }} title={t('nav.ticketDetail')} onClick={() => ctx.go('ticketDetail', { id: i.ticketId })}>
+                          <button className="icon-btn" style={{ width: 30, height: 30 }} title={t('nav.orders')} onClick={() => ctx.go('soDetail', { id: i.serviceOrderId })}>
                             <Icon name="external" size={14} />
                           </button>
                         )}

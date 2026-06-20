@@ -15,6 +15,8 @@ import {
   toMin,
   toHHMM,
   TimeRange,
+  soEquipments,
+  visitWorkedMinutes,
 } from './shared';
 import { tcol, resolvePublicToken, createPublicToken, invalidatePublicToken } from './tenant';
 import { SMTP_USER, SMTP_PASS, sendMail, layout, getBranding, publicBranding, type EmailBranding } from './notifications';
@@ -389,23 +391,48 @@ export const getPublicServiceReport = onCall(async (req) => {
     report: {
       num: so.num,
       type: so.type,
+      mode: so.mode || 'periodico',
       status: so.status,
+      title: so.title || '',
+      site: so.site || '',
+      address: so.address || '',
+      description: so.description || '',
       scheduledDate: so.scheduledDate,
       startedAt: so.startedAt,
       finishedAt: so.finishedAt,
-      equipment: so.equipmentSnapshot,
+      equipment: so.equipmentSnapshot || null,
+      // Multi-equipo: cada equipo con su snapshot + checklist saneado.
+      equipments: soEquipments(so).map((e: any) => ({
+        equipmentSnapshot: e.equipmentSnapshot || null,
+        checklistTemplateVersion: e.checklistTemplateVersion || null,
+        checklist: (e.checklist || []).map((c: any) => ({
+          sectionTitle: c.sectionTitle || null,
+          label: c.label ?? c.text ?? '',
+          type: c.type || null,
+          answer: c.answer ?? null,
+          unit: c.unit || null,
+          alert: !!c.alert,
+          photoUrl: c.photoUrl || null,
+        })),
+      })),
       clientName: so.client?.name || '',
       techName,
       checklist: (so.checklist || []).map((c: any) => ({
         sectionTitle: c.sectionTitle || null,
-        label: c.label,
-        type: c.type,
+        label: c.label ?? c.text ?? '',
+        text: c.text ?? null,
+        done: typeof c.done === 'boolean' ? c.done : null,
+        type: c.type || null,
         answer: c.answer ?? null,
         unit: c.unit || null,
         alert: !!c.alert,
         photoUrl: c.photoUrl || null,
       })),
       photos: (so.photos || []).map((p: any) => ({ url: p.url, desc: p.desc || '', at: p.at || null })),
+      // Evidencia libre (demanda): foto/video/pdf saneada (sin path interno).
+      evidence: (so.evidence || []).map((e: any) => ({ file: e.file, type: e.type, desc: e.desc || '', date: e.date || null, name: e.name || null, visitId: e.visitId || null })),
+      // Trabajo por día (demanda): visitas saneadas para el desglose público.
+      visits: (so.visits || []).map((v: any) => ({ id: v.id, date: v.date, techName: v.techName || '', note: v.note || '', minutes: visitWorkedMinutes(v) })),
       observations: so.observations || '',
       // Cédula enmascarada en el reporte público (PII): solo se muestran los últimos 4.
       signature: so.signature ? { name: so.signature.name, idNumber: maskId(so.signature.idNumber), url: so.signature.url, at: so.signature.at } : null,

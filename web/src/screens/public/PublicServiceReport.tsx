@@ -7,7 +7,42 @@ import { functions } from '../../lib/firebase';
 import { BrandLogo, Icon, SOStatusBadge, MediaGallery, LangSwitcher } from '../../components/ui';
 import { brandVars } from '../../lib/branding';
 import DynamicChecklist from '../../components/DynamicChecklist';
+import { VisitBar } from '../../components/visits';
+import { fmtDuration } from '../../lib/time';
 import { PublicError } from './PublicView';
+
+function PublicVisits({ visits, evidence }: { visits: any[]; evidence: any[] }) {
+  const { t } = useTranslation();
+  const lastId = visits.length ? visits[visits.length - 1].id : '';
+  const [over, setOver] = useState<Record<string, boolean>>({});
+  const isOpen = (vid: string) => (vid in over ? over[vid] : vid === lastId);
+  const toggle = (vid: string) => setOver((p) => ({ ...p, [vid]: !isOpen(vid) }));
+  const totalMin = visits.reduce((a, v) => a + (v.minutes || 0), 0);
+  return (
+    <div className="card" style={{ overflow: 'hidden', marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 16px 4px' }}>
+        <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '.06em', margin: 0 }}>{t('ticketDetail.visitsTitle', { count: visits.length })}</h2>
+        {totalMin > 0 && <span style={{ fontSize: 13, fontWeight: 700 }}>{t('serviceOrders.totalHours')}: {fmtDuration(totalMin)}</span>}
+      </div>
+      {visits.map((v: any, idx: number) => {
+        const photos = evidence.filter((e) => e.visitId === v.id).map((e: any, i: number) => ({ id: 'v' + idx + '-' + i, file: e.file, type: e.type, desc: e.desc || '', date: e.date || '', name: e.name }));
+        const open = isOpen(v.id);
+        return (
+          <div key={v.id}>
+            <VisitBar index={idx} dateStr={v.date} meta={v.minutes ? fmtDuration(v.minutes) : v.techName} preview={v.note} count={photos.length} open={open} onToggle={() => toggle(v.id)} />
+            {open && (
+              <div className="fade-in" style={{ padding: '0 16px 16px 73px' }}>
+                {v.minutes ? <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 700 }}>{fmtDuration(v.minutes)}</p> : null}
+                {v.note ? <p style={{ margin: '0 0 10px', fontSize: 14, lineHeight: 1.55 }}>{v.note}</p> : null}
+                {photos.length > 0 && <MediaGallery items={photos} />}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function PublicServiceReport() {
   const { t } = useTranslation();
@@ -45,7 +80,13 @@ export default function PublicServiceReport() {
   if (err || !report) return <PublicError type={err || '404'} />;
 
   const eq = report.equipment || {};
+  const isDemand = (report.mode || 'periodico') === 'demanda';
+  const equipments = report.equipments || [];
+  const visits = report.visits || [];
   const photos = (report.photos || []).map((p: any, i: number) => ({ id: 'p' + i, file: p.url, type: 'image' as const, desc: p.desc || '', date: p.at || '' }));
+  // Evidencia suelta (sin día): la de cada visita se muestra en el acordeón de visitas.
+  const looseEvidence = (report.evidence || []).filter((e: any) => !e.visitId);
+  const evidence = looseEvidence.map((e: any, i: number) => ({ id: 'e' + i, file: e.file, type: e.type, desc: e.desc || '', date: e.date || '', name: e.name }));
 
   const Field = ({ label, value }: { label: string; value?: string | null }) => (
     <div>
@@ -70,26 +111,71 @@ export default function PublicServiceReport() {
       <div style={{ maxWidth: 880, margin: '0 auto', padding: '28px 24px 60px' }}>
         <h1 style={{ margin: '0 0 4px', fontSize: 24, fontWeight: 700 }}>{t('publicReport.title')}</h1>
         <p style={{ margin: '0 0 24px', fontSize: 14, color: 'var(--text-2)' }}>
-          {t('publicReport.sub', { type: t('serviceOrders.type_' + report.type) })}
+          {isDemand ? (report.title || t('publicReport.title')) : t('publicReport.sub', { type: t('serviceOrders.type_' + report.type) })}
         </p>
 
         <div className="card card-pad" style={{ marginBottom: 20 }}>
           <div className="public-summary">
             <Field label={t('publicReport.client')} value={report.clientName} />
-            <Field label={t('publicReport.equipment')} value={[eq.typeName, eq.brand, eq.model].filter(Boolean).join(' ')} />
-            <Field label={t('publicReport.serial')} value={eq.serial} />
-            <Field label={t('publicReport.location')} value={eq.location} />
+            {isDemand ? (
+              <Field label={t('serviceOrders.fSite')} value={report.site || report.address} />
+            ) : equipments.length > 1 ? (
+              <Field label={t('publicReport.equipment')} value={t('serviceOrders.nEquipment', { count: equipments.length })} />
+            ) : (
+              <>
+                <Field label={t('publicReport.equipment')} value={[eq.typeName, eq.brand, eq.model].filter(Boolean).join(' ')} />
+                <Field label={t('publicReport.serial')} value={eq.serial} />
+                <Field label={t('publicReport.location')} value={eq.location} />
+              </>
+            )}
             <Field label={t('publicReport.tech')} value={report.techName} />
             <Field label={t('publicReport.date')} value={report.finishedAt || report.scheduledDate} />
           </div>
+          {isDemand && report.description && (
+            <p style={{ margin: '14px 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--text-2)' }}>{report.description}</p>
+          )}
         </div>
 
-        {(report.checklist || []).length > 0 && (
+        {/* Demanda: checklist ad-hoc */}
+        {isDemand && (report.checklist || []).length > 0 && (
           <div className="card card-pad" style={{ marginBottom: 20 }}>
             <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '.06em', margin: '0 0 12px' }}>
               {t('publicReport.checklist')}
             </h2>
-            <DynamicChecklist items={report.checklist} mode="readonly" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {report.checklist.map((it: any, i: number) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                  <Icon name={it.done ? 'checkCircle' : 'circle'} size={16} style={{ color: it.done ? 'var(--st-apro-fg)' : 'var(--text-3)' }} />
+                  <span style={{ textDecoration: it.done ? 'line-through' : 'none', color: it.done ? 'var(--text-3)' : 'inherit' }}>{it.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Periódico/correctivo: una sección de checklist por equipo */}
+        {!isDemand && equipments.map((e: any, i: number) => (
+          (e.checklist || []).length > 0 && (
+            <div className="card card-pad" style={{ marginBottom: 20 }} key={i}>
+              <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '.06em', margin: '0 0 4px' }}>
+                {e.equipmentSnapshot?.typeName || t('publicReport.equipment')}
+              </h2>
+              <div className="mono" style={{ fontSize: 12, color: 'var(--text-3)', margin: '0 0 12px' }}>
+                {[e.equipmentSnapshot?.brand, e.equipmentSnapshot?.model].filter(Boolean).join(' ')}{e.equipmentSnapshot?.serial ? ` · S/N ${e.equipmentSnapshot.serial}` : ''}{e.equipmentSnapshot?.location ? ` · ${e.equipmentSnapshot.location}` : ''}
+              </div>
+              <DynamicChecklist items={e.checklist} mode="readonly" />
+            </div>
+          )
+        ))}
+
+        {isDemand && visits.length > 0 && <PublicVisits visits={visits} evidence={report.evidence || []} />}
+
+        {evidence.length > 0 && (
+          <div className="card card-pad" style={{ marginBottom: 20 }}>
+            <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '.06em', margin: '0 0 12px' }}>
+              {t('serviceOrders.evidence')}
+            </h2>
+            <MediaGallery items={evidence} />
           </div>
         )}
 

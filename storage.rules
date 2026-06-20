@@ -27,10 +27,12 @@ service firebase.storage {
       allow delete:         if isAdmin(tid);
     }
 
-    // Service orders: checklist photos + client signature PNG.
+    // Service orders: checklist photos, client signature PNG, y evidencia libre
+    // (foto/video/PDF) para órdenes por demanda. La compresión de video la hace
+    // onEvidenceFinalized. Acceso público solo vía download-token (getPublicServiceReport).
     match /tenants/{tid}/serviceOrders/{soId}/{allPaths=**} {
       allow read:           if inTenant(tid);
-      allow create, update: if inTenant(tid) && sizeOk() && okImage();
+      allow create, update: if inTenant(tid) && sizeOk() && (okImage() || okVideo() || okPdf());
       allow delete:         if inTenant(tid);
     }
 

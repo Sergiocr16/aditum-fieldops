@@ -1,11 +1,17 @@
 # Aditum FieldOps
 
-> Gestión de trabajo técnico en sitio — tickets de mantenimiento, evidencias (foto/PDF/video),
-> link público de solo lectura para clientes, y Wiki de documentación.
-> **© 2026 Aditum. Software propietario** (ver [LICENSE](./LICENSE)).
+> Gestión de **órdenes de servicio** (mantenimiento y trabajo técnico en sitio), evidencias
+> (foto/PDF/video), control de horas, link público de solo lectura para clientes, facturación
+> electrónica (GTI) y Wiki. **© 2026 Aditum. Software propietario** (ver [LICENSE](./LICENSE)).
 
-Hecho para Aditum (control de acceso, Costa Rica). Dos roles: **Administrador** (escritorio) y
-**Técnico** (móvil). Interfaz en **español e inglés**.
+Hecho para Aditum (control de acceso, Costa Rica). Multi-tenant. Roles: **Administrador**,
+**Coordinador**, **Facturación** (escritorio) y **Técnico** (móvil). Interfaz en **español e inglés**.
+
+**Modelo unificado:** una sola entidad **Orden** (`serviceOrders`) con `mode` **periódico**
+(mantenimiento programado por contrato/equipos) o **por demanda** (trabajo puntual, ex "orden de
+trabajo"). Una orden puede agrupar **varios equipos** (cada uno con su checklist) y registra **horas**
+(fichaje por día). El antiguo módulo `tickets` se retiró de la UI (datos migrables; links `/p/` legacy
+siguen funcionando).
 
 ## 🚀 Producción
 
@@ -24,29 +30,33 @@ Estado actual: Hosting, Firestore/Storage rules y las **5 Cloud Functions** desp
 
 ```
 Navegador (SPA React)  ──►  Firebase Hosting
-   │  Firestore SDK / callable │─ Auth (email/contraseña, claim de rol admin|tech)
-   ├──────────────────────────►├─ Firestore (tickets, users, wiki, counters)
-   │                           ├─ Storage (evidencias, media de wiki)
-   │                           └─ Cloud Functions (técnicos, link público, compresión de video)
+   │  Firestore SDK / callable │─ Auth (email/contraseña, claims de rol admin|coordinador|facturacion|tech)
+   ├──────────────────────────►├─ Firestore (tenants/{tid}: serviceOrders, contracts, equipment, users, wiki, fiscal…)
+   │                           ├─ Storage (evidencias, firmas, media de wiki)
+   │                           └─ Cloud Functions (scheduler, ciclo de orden, reporte público, GTI, compresión de video)
    │
 Claude Code ──► MCP server (mcp/) ──► Firebase Admin SDK ──► mismo proyecto en producción
 ```
 
 - **web/** — Vite + React + TypeScript (SPA). Design system en `web/src/styles/{tokens,layout}.css`.
   i18n ES/EN con `react-i18next`. Markdown de Wiki sanitizado con DOMPurify.
-- **functions/** — Cloud Functions v2 (Node 20): `createTechnician`, `updateTechnician`,
-  `resetTechnicianPassword`, `getPublicTicket` (sin auth, DTO saneado), `onEvidenceFinalized`
-  (comprime video con ffmpeg, en `us-east1`).
+- **functions/** — Cloud Functions v2 (Node 20): técnicos (`createTechnician`…), ciclo de orden
+  (`startServiceOrder`/`completeServiceOrder`/`approveServiceOrder`/…), `onServiceOrderWritten`,
+  `scheduler`, reporte público (`getPublicServiceReport`; `getPublicTicket` legacy), GTI/facturación,
+  `onEvidenceFinalized` (comprime video con ffmpeg, en `us-east1`).
 - **shared/** — lógica común (validación, numeración `AD-####`, tipos). La usan `mcp/` (vía `file:`) y
   `functions/` (**vendorizada** como `functions/src/shared.ts`, ver nota de deploy).
-- **mcp/** — servidor MCP para crear/gestionar tickets y wiki desde Claude Code.
-- **seed/** — admin inicial, datos demo y provisión de APIs/DB.
+- **mcp/** — servidor MCP para crear/gestionar órdenes, wiki, inventario y fiscal desde Claude Code.
+- **seed/** — admin inicial (`seed.mjs`), datos demo (`demo.mjs`) y migraciones (`migrate-*.mjs`).
 
 ## Modelo de datos (Firestore)
 
-`users`, `tickets` (con `checklist[]`, `evidence[]`, `history[]`, `comments[]`, `share{token,active,...}`,
-y `visits[]` para trabajos de varios días), `counters/tickets`, `wikiCategories`, `wikiPages`. Detalle en
-[CLAUDE.md](./CLAUDE.md).
+Todo bajo `tenants/{tid}/...`. Entidad central **`serviceOrders`** (`mode` periódico|demanda; `equipments[]`
+con checklist por equipo; `visits[]` con `segments[]` de fichaje y `hours`; `evidence[]`, `materials[]`,
+`signature`, `reportShare`, billing). Soporte: `contracts` (`modality`, periodicidad incl. **quincenal**=`0.5`,
+cadencia `nextScheduledDate`), `equipment`, `equipmentTypes` + `checklistTemplates`, `inventory`(+movimientos),
+fiscal (`invoiceItems`/`invoices`/`clients`/`chargeTypes`), `wikiCategories`/`wikiPages`, `users`, `counters`.
+`tickets` queda legacy (solo lectura para `/p/`). Detalle en [CLAUDE.md](./CLAUDE.md).
 
 ## Requisitos de tooling (importante)
 
@@ -63,9 +73,13 @@ y `visits[]` para trabajos de varios días), `counters/tickets`, `wikiCategories
 npm --prefix shared run build && npm --prefix functions run build
 npx firebase-tools@13 emulators:start --only auth,functions,firestore,storage --project demo-aditum-fieldops
 
-# Sembrar admin (contra emuladores):
+# Sembrar admin + técnicos (contra emuladores):
 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
   FIREBASE_PROJECT_ID=demo-aditum-fieldops node seed/seed.mjs
+# Datos demo del modelo unificado (contratos periódico/quincenal/demanda, equipos, órdenes multi-equipo, fichaje):
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
+  FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:9199 FIREBASE_PROJECT_ID=demo-aditum-fieldops \
+  BASE_HOST=localhost node seed/demo.mjs
 
 # Front:
 npm --prefix web run dev      # http://localhost:5173
@@ -122,9 +136,10 @@ npx firebase-tools@13 deploy --project fieldops-aditum --non-interactive
 
 ## Roles y permisos
 
-- **Admin**: usuarios, tickets, aprobar/rechazar, links públicos, wiki.
-- **Técnico**: solo sus tickets asignados + wiki publicada.
-- **Público**: sin login; solo `getPublicTicket` con un token **activo** (muestra el reporte saneado).
+- **Admin**: usuarios, órdenes, contratos/equipos, aprobar/rechazar, facturación, inventario, links públicos, wiki.
+- **Coordinador**: contratos, equipos, órdenes, agenda. **Facturación**: bandeja y emisión de facturas.
+- **Técnico** (móvil): solo sus órdenes asignadas (ejecuta checklist, evidencia, fichaje de horas) + wiki publicada.
+- **Público**: sin login; `getPublicServiceReport` (`/r/:token`) o `getPublicTicket` (`/p/:token`) con token **activo** (reporte saneado).
 
 ## Pantalla de acceso (login)
 

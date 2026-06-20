@@ -228,7 +228,7 @@ export default function Inventory({ ctx }: { ctx: AppCtx }) {
                       <td>
                         <button
                           className="mono"
-                          onClick={() => ctx.go('ticketDetail', { id: m.ticketId })}
+                          onClick={() => ctx.go('soDetail', { id: m.ticketId })}
                           style={{ border: 'none', background: 'transparent', color: 'var(--navy-700)', fontWeight: 600, cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}
                         >
                           {m.ticketNum}
@@ -279,7 +279,7 @@ export default function Inventory({ ctx }: { ctx: AppCtx }) {
                 {inv.movements.filter((m) => m.productId === edit.id).slice(0, 6).map((m) => (
                   <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '5px 0', borderBottom: '1px solid var(--border)' }}>
                     <span style={{ color: 'var(--text-2)' }}>
-                      <button onClick={() => { setEdit(null); ctx.go('ticketDetail', { id: m.ticketId }); }} className="mono" style={{ border: 'none', background: 'transparent', color: 'var(--navy-700)', fontWeight: 600, cursor: 'pointer', padding: 0 }}>{m.ticketNum}</button>
+                      <button onClick={() => { setEdit(null); ctx.go('soDetail', { id: m.ticketId }); }} className="mono" style={{ border: 'none', background: 'transparent', color: 'var(--navy-700)', fontWeight: 600, cursor: 'pointer', padding: 0 }}>{m.ticketNum}</button>
                       {' · '}{[m.client, m.site].filter(Boolean).join(' · ')}
                     </span>
                     <span><b>-{m.qty}</b> <span className="mono" style={{ color: 'var(--text-3)' }}>{(m.at || '').split(' ')[0]}</span></span>

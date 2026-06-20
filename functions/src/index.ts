@@ -21,7 +21,7 @@ export * from './tenants';
 export * from './smtp';
 export { importEquipment, setTechnicianAvailability } from './maintenance';
 export { dailyMaintenanceJob, runMaintenanceScheduler } from './scheduler';
-export { startServiceOrder, completeServiceOrder, onServiceOrderWritten } from './serviceOrders';
+export { startServiceOrder, completeServiceOrder, requestServiceReview, approveServiceOrder, rejectServiceOrder, onServiceOrderWritten } from './serviceOrders';
 export { getPublicServiceOrder, confirmServiceOrder, getTechnicianSlots, holdSlot, rescheduleServiceOrder, getPublicServiceReport } from './publicFlow';
 export { consolidateInvoiceItems, exportInvoiceCsv } from './billing';
 export { saveGtiConfig, testGtiConfig, emitElectronicInvoice, createManualInvoice, emitCreditNote, resendFiscalEmail, queryFiscalStatus, pollFiscalStatus } from './fiscal';
@@ -290,21 +290,23 @@ const LEGACY_TENANT = process.env.LEGACY_TENANT_ID || 'aditum';
 export const onEvidenceFinalized = onObjectFinalized({ memory: '1GiB', timeoutSeconds: 300, region: process.env.STORAGE_REGION || 'us-east1' }, async (event) => {
   const object = event.data;
   const filePath = object.name || '';
-  // tenants/{tid}/tickets/{ticketId}/... — with a legacy fallback for in-flight
+  // tenants/{tid}/{tickets|serviceOrders}/{docId}/... — with a legacy fallback for in-flight
   // uploads under the pre-tenant `tickets/` prefix during the migration window.
   const parts = filePath.split('/');
   let tid: string;
-  if (parts[0] === 'tenants' && parts[2] === 'tickets') tid = parts[1];
-  else if (parts[0] === 'tickets') tid = LEGACY_TENANT;
+  let coll: 'tickets' | 'serviceOrders';
+  if (parts[0] === 'tenants' && (parts[2] === 'tickets' || parts[2] === 'serviceOrders')) { tid = parts[1]; coll = parts[2] as any; }
+  else if (parts[0] === 'tickets') { tid = LEGACY_TENANT; coll = 'tickets'; }
   else return;
   if (filePath.includes('/compressed/')) return; // already processed
   const meta = object.metadata || {};
-  const ticketId = meta.ticketId;
+  const docId = coll === 'serviceOrders' ? (meta.serviceOrderId || meta.ticketId) : meta.ticketId;
   const evidenceId = meta.evidenceId;
-  if (!ticketId || !evidenceId) return;
+  if (!docId || !evidenceId) return;
   const isVideo = (object.contentType || '').startsWith('video/');
 
-  const ticketRef = tcol(tid, 'tickets').doc(ticketId);
+  const ticketId = docId; // reusa el nombre para los paths/metadata abajo
+  const ticketRef = tcol(tid, coll).doc(docId);
 
   if (!isVideo) {
     // images/pdf are ready as-is; ensure status flag is set
@@ -333,7 +335,7 @@ export const onEvidenceFinalized = onObjectFinalized({ memory: '1GiB', timeoutSe
         .save(tmpOut);
     });
 
-    const compressedPath = `tenants/${tid}/tickets/${ticketId}/compressed/${evidenceId}.mp4`;
+    const compressedPath = `tenants/${tid}/${coll}/${ticketId}/compressed/${evidenceId}.mp4`;
     const downloadToken = randomUUID();
     await bucket.upload(tmpOut, {
       destination: compressedPath,

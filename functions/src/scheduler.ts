@@ -6,7 +6,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as logger from 'firebase-functions/logger';
 import * as admin from 'firebase-admin';
-import { nowCR, addMonthsCR, soPlanId, createServiceOrderWithNumber, PeriodicityMonths, PERIODICITIES } from './shared';
+import { nowCR, addPeriodCR, soContractPlanId, createServiceOrderWithNumber, PeriodicityMonths, PERIODICITIES } from './shared';
 import { tcol, tenantRef } from './tenant';
 import { SMTP_USER, SMTP_PASS } from './notifications';
 import { sendNotices, sendReminders } from './publicFlow';
@@ -62,19 +62,40 @@ export async function generateForTenant(tid: string, today: string): Promise<{ c
   const typeNames = new Map<string, string>();
   typesSnap.docs.forEach((d) => typeNames.set(d.id, (d.data() as any).name || ''));
 
+  // Agrupar equipos activos por contrato: una sola orden por contrato/visita con todos sus equipos.
   const equipmentSnap = await tcol(tid, 'equipment').where('active', '==', true).get();
+  const byContract = new Map<string, any[]>();
+  for (const eqDoc of equipmentSnap.docs) {
+    const eq = { id: eqDoc.id, ...(eqDoc.data() as any) };
+    if (!byContract.has(eq.contractId)) byContract.set(eq.contractId, []);
+    byContract.get(eq.contractId)!.push(eq);
+  }
+
   let created = 0;
   let checked = 0;
 
-  for (const eqDoc of equipmentSnap.docs) {
-    const eq = eqDoc.data() as any;
-    const contract = contracts.get(eq.contractId);
-    if (!contract) continue; // contrato inactivo o borrado
+  for (const [contractId, contractDoc] of contracts) {
+    const contract = contractDoc;
+    if (contract.modality === 'demanda') continue; // por demanda no genera automáticas
+    const eqs = byContract.get(contractId) || [];
+    if (!eqs.length) continue; // sin equipos no hay visita
     checked++;
 
-    const per: PeriodicityMonths = (eq.periodicityMonths && PERIODICITIES.includes(eq.periodicityMonths) ? eq.periodicityMonths : contract.defaultPeriodicityMonths || 3) as PeriodicityMonths;
-    const noticeDays = eq.noticeDaysBefore ?? contract.noticeDaysBefore ?? settings.defaultNoticeDaysBefore;
-    let cursor: string = eq.nextScheduledDate || addMonthsCR(eq.lastServiceDate || contract.startDate || today, per);
+    const per: PeriodicityMonths = (PERIODICITIES.includes(contract.defaultPeriodicityMonths) ? contract.defaultPeriodicityMonths : 3) as PeriodicityMonths;
+    const noticeDays = contract.noticeDaysBefore ?? settings.defaultNoticeDaysBefore;
+    let cursor: string = contract.nextScheduledDate || addPeriodCR(contract.lastServiceDate || contract.startDate || today, per);
+
+    const equipments = eqs.map((eq) => ({
+      equipmentId: eq.id,
+      equipmentSnapshot: {
+        typeId: eq.typeId,
+        typeName: typeNames.get(eq.typeId) || '',
+        brand: eq.brand || '',
+        model: eq.model || '',
+        serial: eq.serial || '',
+        location: eq.location || '',
+      },
+    }));
 
     let guard = 0;
     while (cursor <= addDays(today, settings.horizonDays) && guard < 50) {
@@ -85,29 +106,21 @@ export async function generateForTenant(tid: string, today: string): Promise<{ c
         tid,
         {
           type: 'preventivo',
-          contractId: eqDoc.id ? eq.contractId : eq.contractId,
-          equipmentId: eqDoc.id,
-          equipmentSnapshot: {
-            typeId: eq.typeId,
-            typeName: typeNames.get(eq.typeId) || '',
-            brand: eq.brand || '',
-            model: eq.model || '',
-            serial: eq.serial || '',
-            location: eq.location || '',
-          },
+          contractId,
+          equipments,
           client: { name: contract.clientName || '', email: contract.clientEmail || '', phone: contract.clientPhone || '' },
-          techId: eq.assignedTechId || contract.defaultTechId || null,
+          techId: contract.defaultTechId || null,
           planDate: cursor,
           scheduledDate: cursor,
           noticeDaysBefore: noticeDays,
         },
         'scheduler',
         osPrefix,
-        soPlanId(eqDoc.id, cursor)
+        soContractPlanId(contractId, cursor)
       );
       if (res.created) created++;
-      cursor = addMonthsCR(cursor, per);
-      await eqDoc.ref.set({ nextScheduledDate: cursor, updatedAt: nowCR() }, { merge: true });
+      cursor = addPeriodCR(cursor, per);
+      await tcol(tid, 'contracts').doc(contractId).set({ nextScheduledDate: cursor, updatedAt: nowCR() }, { merge: true });
     }
   }
   return { created, checked };

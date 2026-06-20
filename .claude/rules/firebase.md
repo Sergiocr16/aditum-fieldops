@@ -1,21 +1,24 @@
 # Rule: Firebase
 
-- **Auth/roles**: el rol vive en un *custom claim* (`role: 'admin' | 'tech'`), seteado por Cloud Functions
-  al crear usuarios. Nunca confíes solo en el doc `users`; valida el claim en backend.
-- **Escritura de `users`**: solo vía Cloud Functions (Admin SDK). El cliente no escribe `users` (las rules
-  lo prohíben).
-- **Tickets**: el cliente (admin) los crea con una transacción sobre `counters/tickets` para el número
-  `AD-####`. Las transiciones de estado escriben siempre una entrada en `history` (ver `web/src/lib/actions.ts`).
-- **Reglas como segunda capa**: además de validar en Functions, mantené `firestore.rules` y `storage.rules`
-  estrictas. Un técnico solo lee/escribe tickets donde `techId == auth.uid` y en estados editables, y solo
-  los campos de la lista blanca (`status,checklist,evidence,history,materials,materialsNote,readyAt,
-  techNote,techObs,visits`). Si agregás un campo que el técnico escribe (ej. otro de `visits`), sumalo a
-  esa lista en `firestore.rules`.
-- **Storage**: rutas `tickets/{ticketId}/...` y `wiki/{pageId}/...`. Valida `contentType` y tamaño en las
-  rules. La compresión de video la hace `onEvidenceFinalized`.
-- **Vista pública**: SOLO vía la function `getPublicTicket` (token). Nunca expongas comentarios internos,
-  historial, datos de otros tickets ni colecciones directas al público.
-- **shared/**: si cambias validación/numeración/tipos compartidos, edita `shared/src/index.ts` y recompila
-  (`npm --prefix shared run build`) para que functions y mcp lo tomen.
+- **Multi-tenant**: todo vive bajo `tenants/{tid}/...`. Las reglas validan `request.auth.token.tenantId == tid`.
+- **Auth/roles**: el rol vive en *custom claims* (`role` y `roles[]`: `admin|coordinador|facturacion|tech`),
+  seteados por Cloud Functions. Nunca confíes solo en el doc `users`; valida el claim en backend.
+- **Escritura de `users`**: solo vía Cloud Functions (Admin SDK). El cliente no escribe `users`.
+- **Órdenes (`serviceOrders`)** — entidad unificada (`mode: periodico|demanda`). Las preventivas las crea el
+  **scheduler** (id determinístico `co_{contractId}_{YYYYMMDD}`, idempotente); las correctivas/demanda las
+  crea el admin client-side con transacción sobre `counters/serviceOrders`. Las transiciones de estado
+  escriben en `history` y respetan `SO_TRANSITIONS` (ver `shared`).
+- **Reglas como segunda capa**: mantené `firestore.rules`/`storage.rules` estrictas. El técnico solo
+  lee/escribe órdenes donde `techId == auth.uid`, en `EN_PROGRESO`, y solo la lista blanca de campos
+  (`status,checklist,photos,evidence,visits,materials,materialsNote,observations,techObs,readyAt` — los
+  `equipments[]` y los `segments` de fichaje van dentro de `visits`/`equipments`). Si agregás un campo que
+  el técnico escribe, sumalo a esa lista. `start/complete/approve/reject` van por **callable** (Admin SDK).
+- **Storage**: rutas `tenants/{tid}/serviceOrders/{id}/...` y `.../wiki/{pageId}/...`. Valida `contentType`
+  y tamaño (img/video/pdf ≤200MB). La compresión de video la hace `onEvidenceFinalized` (tickets y serviceOrders).
+- **Vista pública**: SOLO vía callable con token — `getPublicServiceReport` (`/r/:token`) y, legacy,
+  `getPublicTicket` (`/p/:token`). DTO **saneado**: nunca expongas comentarios internos, historial,
+  materiales/inventario, datos de otros tenants ni colecciones directas.
+- **shared/**: si cambiás validación/numeración/tipos/helpers, editá `shared/src/index.ts`, recompilá
+  (`npm --prefix shared run build`) y **vendorizá** a `functions/src/shared.ts`.
 - **Nueva Cloud Function**: agrégala en `functions/src/index.ts`, valida `request.auth` y el claim de rol
-  con `assertAdmin` (o equivalente para técnico) antes de actuar.
+  antes de actuar.
