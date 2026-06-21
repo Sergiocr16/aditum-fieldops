@@ -1,12 +1,13 @@
 /* © 2026 Aditum — Aditum FieldOps — Equipment: global list, form modal, types manager, CSV import */
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Icon, Button, Modal, Field, Input, Select, EmptyState, toast, confirmDialog } from '../../components/ui';
+import { Icon, Button, Modal, Field, Input, Select, EmptyState, EquipmentConditionBadge, CONDITIONS, toast, confirmDialog } from '../../components/ui';
 import CsvImport from '../../components/CsvImport';
 import { PageHeader } from './AdminShell';
 import { useContracts, PERIODICITY_OPTIONS } from '../../lib/contracts';
 import { useEquipment } from '../../lib/equipment';
 import { perLabel } from './Contracts';
+import { now, formatDate } from '../../lib/time';
 import type { AppCtx } from '../../lib/ctx';
 import type { Equipment } from '../../lib/types';
 
@@ -58,6 +59,7 @@ export function EquipmentFormModal({
       assignedTechId: editing?.assignedTechId || '',
       periodicityMonths: editing?.periodicityMonths ?? '',
       nextScheduledDate: editing?.nextScheduledDate || '',
+      condition: editing?.condition || 'operativo',
       notes: editing?.notes || '',
     });
   }, [open, editing?.id, contractIdFixed]);
@@ -83,9 +85,14 @@ export function EquipmentFormModal({
         assignedTechId: f.assignedTechId || null,
         periodicityMonths: f.periodicityMonths === '' ? null : (Number(f.periodicityMonths) as any),
         nextScheduledDate: f.nextScheduledDate || null,
+        condition: f.condition,
         notes: f.notes,
       };
       if (editing) {
+        // Si el admin cambió la condición, registrar entrada en el historial.
+        if ((editing.condition || 'operativo') !== f.condition) {
+          payload.conditionHistory = [...(editing.conditionHistory || []), { condition: f.condition, at: now(), by: 'Admin · ' + (ctx.admin?.name || ''), note: t('equipment.changedManually') }];
+        }
         await eq.updateEquipment(editing.id, payload);
         toast(t('equipment.savedEdit'), 'success');
       } else {
@@ -142,10 +149,29 @@ export function EquipmentFormModal({
         <Field label={t('equipment.fNext')} hint={t('equipment.fNextHint')}>
           <Input type="date" value={f.nextScheduledDate} onChange={(e: any) => set('nextScheduledDate', e.target.value)} />
         </Field>
+        <Field label={t('equipment.condition')}>
+          <Select value={f.condition} onChange={(e: any) => set('condition', e.target.value)}>
+            {CONDITIONS.map((c) => <option key={c} value={c}>{t('equipment.cond_' + c)}</option>)}
+          </Select>
+        </Field>
         <Field label={t('equipment.fNotes')}>
           <Input value={f.notes} onChange={(e: any) => set('notes', e.target.value)} />
         </Field>
       </div>
+      {editing && (editing.conditionHistory || []).length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div className="section-label" style={{ marginBottom: 8 }}>{t('equipment.history')}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {[...(editing.conditionHistory || [])].reverse().map((h, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5 }}>
+                <EquipmentConditionBadge condition={h.condition} size="sm" />
+                <span className="mono" style={{ color: 'var(--text-3)' }}>{formatDate(h.at)}{h.orderNum ? ' · ' + h.orderNum : ''}</span>
+                <span style={{ color: 'var(--text-3)' }}>{h.by}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }
@@ -293,6 +319,7 @@ export default function EquipmentScreen({ ctx }: { ctx: AppCtx }) {
                 <th className="hide-sm">{t('equipment.thLocation')}</th>
                 <th className="hide-sm">{t('equipment.thContract')}</th>
                 <th>{t('equipment.thTech')}</th>
+                <th>{t('equipment.thState')}</th>
                 <th>{t('equipment.thNext')}</th>
                 <th></th>
               </tr>
@@ -311,6 +338,7 @@ export default function EquipmentScreen({ ctx }: { ctx: AppCtx }) {
                       <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{c?.clientName}</div>
                     </td>
                     <td style={{ fontSize: 12.5 }}>{techName(e.assignedTechId) || (c && techName(c.defaultTechId)) || '—'}</td>
+                    <td><EquipmentConditionBadge condition={e.condition} size="sm" /></td>
                     <td className="mono" style={{ fontSize: 12.5 }}>{e.nextScheduledDate || '—'}</td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                       <button className="icon-btn" style={{ width: 30, height: 30 }} title={t('common.edit')} onClick={() => { setEditing(e); setFormOpen(true); }}>

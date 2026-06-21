@@ -57,6 +57,7 @@ export function CorrectiveModal({ open, onClose, ctx, onCreated }: { open: boole
             serial: equipment.serial || '',
             location: equipment.location || '',
           },
+          condition: (equipment as any).condition || 'operativo',
         })),
         client: { name: contract.clientName, email: contract.clientEmail || '', phone: contract.clientPhone || '' },
         techId: f.techId || contract.defaultTechId || null,

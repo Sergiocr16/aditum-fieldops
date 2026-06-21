@@ -139,7 +139,7 @@ service cloud.firestore {
           // start/finish/revisión van por callable (Admin SDK). Bloquea inyección de num,
           // status, approval, billing/materialsApplied u otros campos arbitrarios.
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['checklist','photos','evidence','visits','materials','materialsNote','observations','techObs','readyAt'])
+               .hasOnly(['equipments','checklist','photos','evidence','visits','materials','materialsNote','observations','techObs','readyAt'])
         );
       }
       // Disponibilidad/bloqueos: los gestiona admin/coordinador. El técnico solo

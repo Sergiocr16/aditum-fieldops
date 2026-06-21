@@ -95,6 +95,7 @@ export async function generateForTenant(tid: string, today: string): Promise<{ c
         serial: eq.serial || '',
         location: eq.location || '',
       },
+      condition: eq.condition || 'operativo',
     }));
 
     let guard = 0;

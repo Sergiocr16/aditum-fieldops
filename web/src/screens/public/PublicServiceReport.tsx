@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../lib/firebase';
-import { BrandLogo, Icon, SOStatusBadge, MediaGallery, LangSwitcher } from '../../components/ui';
+import { BrandLogo, Icon, SOStatusBadge, MediaGallery, LangSwitcher, EquipmentConditionBadge } from '../../components/ui';
 import { brandVars } from '../../lib/branding';
 import DynamicChecklist from '../../components/DynamicChecklist';
 import { VisitBar } from '../../components/visits';
@@ -157,9 +157,12 @@ export default function PublicServiceReport() {
         {!isDemand && equipments.map((e: any, i: number) => (
           (e.checklist || []).length > 0 && (
             <div className="card card-pad" style={{ marginBottom: 20 }} key={i}>
-              <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '.06em', margin: '0 0 4px' }}>
-                {e.equipmentSnapshot?.typeName || t('publicReport.equipment')}
-              </h2>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, margin: '0 0 4px' }}>
+                <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '.06em', margin: 0 }}>
+                  {e.equipmentSnapshot?.typeName || t('publicReport.equipment')}
+                </h2>
+                <EquipmentConditionBadge condition={e.condition} size="sm" />
+              </div>
               <div className="mono" style={{ fontSize: 12, color: 'var(--text-3)', margin: '0 0 12px' }}>
                 {[e.equipmentSnapshot?.brand, e.equipmentSnapshot?.model].filter(Boolean).join(' ')}{e.equipmentSnapshot?.serial ? ` · S/N ${e.equipmentSnapshot.serial}` : ''}{e.equipmentSnapshot?.location ? ` · ${e.equipmentSnapshot.location}` : ''}
               </div>

@@ -5,7 +5,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 import { storage } from '../../lib/firebase';
 import { useTenant } from '../../lib/tenant';
 import { tenantHasFeature } from '../../lib/modules';
-import { Icon, Button, EmptyState, SOStatusBadge, Stepper, Select, Input, Textarea, Field, toast, confirmDialog } from '../../components/ui';
+import { Icon, Button, EmptyState, SOStatusBadge, Stepper, Select, Input, Textarea, Field, EquipmentConditionBadge, CONDITIONS, toast, confirmDialog } from '../../components/ui';
 import DynamicChecklist, { validateChecklist } from '../../components/DynamicChecklist';
 import { VisitBar } from '../../components/visits';
 import { MobileHeader } from './MobileDashboard';
@@ -133,6 +133,12 @@ export default function MobileServiceOrder({ ctx, id }: { ctx: AppCtx; id: strin
 
   const onAnswer = async (equipmentId: string, itemId: string, answer: any, alert: boolean) => {
     await updateEqChecklist(equipmentId, itemId, { answer, alert, at: now(), by: ctx.admin.name });
+  };
+
+  // Fijar la condición de un equipo dentro de la orden (se propaga al equipo al terminar)
+  const setEqCondition = async (equipmentId: string, condition: string) => {
+    const equipments = ((so as any).equipments || []).map((e: any) => (e.equipmentId === equipmentId ? { ...e, condition } : e));
+    await actions.update(so.id, { equipments } as any);
   };
 
   // ---- materiales / inventario ----
@@ -324,6 +330,16 @@ export default function MobileServiceOrder({ ctx, id }: { ctx: AppCtx; id: strin
           <MBlock key={e.equipmentId || i} title={`${e.equipmentSnapshot?.typeName || t('serviceOrders.equipmentCard')}${e.checklistTemplateVersion ? ' · v' + e.checklistTemplateVersion : ''}`} icon="cpu" gold={editable}>
             <div className="mono" style={{ fontSize: 11.5, color: 'var(--text-3)', marginBottom: 8 }}>
               {[e.equipmentSnapshot?.brand, e.equipmentSnapshot?.model].filter(Boolean).join(' ')}{e.equipmentSnapshot?.serial ? ` · S/N ${e.equipmentSnapshot.serial}` : ''}{e.equipmentSnapshot?.location ? ` · ${e.equipmentSnapshot.location}` : ''}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <span style={{ fontSize: 12.5, color: 'var(--text-2)', fontWeight: 600 }}>{t('equipment.condition')}</span>
+              {editable ? (
+                <Select value={e.condition || 'operativo'} onChange={(ev: any) => setEqCondition(e.equipmentId, ev.target.value)} style={{ flex: 1 }}>
+                  {CONDITIONS.map((c) => <option key={c} value={c}>{t('equipment.cond_' + c)}</option>)}
+                </Select>
+              ) : (
+                <EquipmentConditionBadge condition={e.condition} size="sm" />
+              )}
             </div>
             {(e.checklist?.length || 0) > 0 ? (
               <DynamicChecklist

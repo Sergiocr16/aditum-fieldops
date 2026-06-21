@@ -88,6 +88,8 @@ export interface Equipment {
   lastServiceDate: string | null;
   notes?: string;
   active: boolean;
+  condition?: EquipmentCondition;
+  conditionHistory?: ConditionEntry[];
   importBatchId?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -185,12 +187,16 @@ export interface SOSignature {
   at: string;
 }
 
+export type EquipmentCondition = 'operativo' | 'mal_estado' | 'en_reparacion' | 'fuera_servicio';
+export interface ConditionEntry { condition: EquipmentCondition; at: string; by: string; orderId?: string | null; orderNum?: string | null; note?: string }
+
 export interface SOEquipment {
   equipmentId: string;
   equipmentSnapshot: { typeId: string; typeName: string; brand: string; model: string; serial: string; location: string };
   checklistTemplateId: string | null;
   checklistTemplateVersion: number | null;
   checklist: SOChecklistEntry[];
+  condition?: EquipmentCondition;
 }
 
 export interface ServiceOrder {

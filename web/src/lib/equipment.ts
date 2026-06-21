@@ -76,6 +76,8 @@ export function useEquipment(contractId?: string) {
         lastServiceDate: null,
         notes: data.notes || '',
         active: true,
+        condition: (data as any).condition || 'operativo',
+        conditionHistory: [],
         importBatchId: null,
         createdAt: now(),
         updatedAt: now(),

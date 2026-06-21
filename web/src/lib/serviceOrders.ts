@@ -142,7 +142,7 @@ export function useServiceOrderActions() {
     /** Crea una OS correctiva manual con uno o varios equipos (numeración atómica client-side). */
     createCorrective: async (data: {
       contractId: string;
-      equipments: { equipmentId: string; equipmentSnapshot: any }[];
+      equipments: { equipmentId: string; equipmentSnapshot: any; condition?: string }[];
       client: { name: string; email: string; phone: string };
       techId: string | null;
       scheduledDate: string;
@@ -178,6 +178,7 @@ export function useServiceOrderActions() {
             checklistTemplateId: null,
             checklistTemplateVersion: null,
             checklist: [],
+            condition: e.condition || 'operativo',
           })),
           client: data.client,
           techId: data.techId || null,

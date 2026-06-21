@@ -163,17 +163,17 @@ async function main() {
   console.log('✓ 3 contratos (periódico trimestral, periódico QUINCENAL, por demanda)');
 
   /* ---- equipos ---- */
-  const mkEq = async (c, type, brand, model, serial, loc) => { const ref = t('equipment').doc(); await ref.set({ contractId: c.id, typeId: typeId[type], brand, model, serial, location: loc, assignedTechId: null, periodicityMonths: null, noticeDaysBefore: null, nextScheduledDate: null, lastServiceDate: null, notes: '', active: true, importBatchId: null, createdAt: now(), updatedAt: now() }); return { id: ref.id, typeId: typeId[type], typeName: type, brand, model, serial, location: loc }; };
+  const mkEq = async (c, type, brand, model, serial, loc, condition = 'operativo') => { const ref = t('equipment').doc(); const hist = condition !== 'operativo' ? [{ condition, at: addDays(d, -40) + ' 10:00', by: 'Admin', note: 'Registro inicial' }] : []; await ref.set({ contractId: c.id, typeId: typeId[type], brand, model, serial, location: loc, assignedTechId: null, periodicityMonths: null, noticeDaysBefore: null, nextScheduledDate: null, lastServiceDate: null, notes: '', active: true, condition, conditionHistory: hist, importBatchId: null, createdAt: now(), updatedAt: now() }); return { id: ref.id, typeId: typeId[type], typeName: type, brand, model, serial, location: loc, condition }; };
 
   const fa = await mkEq(cFarmacia, 'Refrigerador', 'Vestfrost', 'AKG-377', 'VF-1001', 'Farmacia Centro');
-  const fb = await mkEq(cFarmacia, 'Refrigerador', 'Imbera', 'VR-12', 'IMB-2210', 'Farmacia Centro');
+  const fb = await mkEq(cFarmacia, 'Refrigerador', 'Imbera', 'VR-12', 'IMB-2210', 'Farmacia Centro', 'mal_estado');
   const fc = await mkEq(cFarmacia, 'Congelador', 'LG', 'GF-300', 'LG-7781', 'Bodega fría');
   const sa = await mkEq(cSuper, 'Aire Acondicionado', 'Carrier', '24K', 'CAR-501', 'Caja 1');
-  const sb = await mkEq(cSuper, 'Aire Acondicionado', 'LG', '18K', 'LG-9002', 'Caja 2');
+  const sb = await mkEq(cSuper, 'Aire Acondicionado', 'LG', '18K', 'LG-9002', 'Caja 2', 'fuera_servicio');
   console.log('✓ 5 equipos (3 en Farmacia, 2 en Súper)');
 
   const snap = (e) => ({ typeId: e.typeId, typeName: e.typeName, brand: e.brand, model: e.model, serial: e.serial, location: e.location });
-  const eqEntry = (e, checklist = []) => ({ equipmentId: e.id, equipmentSnapshot: snap(e), checklistTemplateId: `${e.typeId}_v1`, checklistTemplateVersion: 1, checklist });
+  const eqEntry = (e, checklist = [], condition) => ({ equipmentId: e.id, equipmentSnapshot: snap(e), checklistTemplateId: `${e.typeId}_v1`, checklistTemplateVersion: 1, checklist, condition: condition || e.condition || 'operativo' });
   const cliOf = (c) => ({ name: c.clientName, email: c.clientEmail, phone: c.clientPhone || '' });
 
   /* ---- imágenes demo ---- */
@@ -214,7 +214,7 @@ async function main() {
     cadenceApplied: true,
     equipments: [
       eqEntry(fa, snapshotChecklist('Refrigerador', [{ answer: true }, { answer: 'Bueno' }, { answer: 4.2 }, { photoUrl: fotoRefri.url, photoPath: fotoRefri.path }])),
-      eqEntry(fb, snapshotChecklist('Refrigerador', [{ answer: true }, { answer: 'Regular' }, { answer: 9.1, alert: true }, { photoUrl: fotoRefri.url, photoPath: fotoRefri.path }])),
+      eqEntry(fb, snapshotChecklist('Refrigerador', [{ answer: true }, { answer: 'Malo' }, { answer: 12.5, alert: true }, { photoUrl: fotoRefri.url, photoPath: fotoRefri.path }]), 'fuera_servicio'),
       eqEntry(fc, snapshotChecklist('Congelador', [{ answer: true }, { answer: -18 }])),
     ],
     observations: 'Mantenimiento completo de los 3 equipos. El refrigerador IMB-2210 quedó con temperatura alta, se recomienda recarga de gas.',

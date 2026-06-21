@@ -1,7 +1,7 @@
 /* © 2026 Aditum — Aditum FieldOps — Service-order detail (admin) */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Icon, Button, Modal, Field, Input, Select, Textarea, EmptyState, SOStatusBadge, MediaGallery, toast, confirmDialog } from '../../components/ui';
+import { Icon, Button, Modal, Field, Input, Select, Textarea, EmptyState, SOStatusBadge, MediaGallery, EquipmentConditionBadge, CONDITIONS, toast, confirmDialog } from '../../components/ui';
 import { PageHeader } from './AdminShell';
 import { useServiceOrder, useServiceOrderActions, soEquipments } from '../../lib/serviceOrders';
 import { useAuth } from '../../lib/auth';
@@ -86,6 +86,11 @@ export default function ServiceOrderDetail({ ctx, id }: { ctx: AppCtx; id: strin
   const inReview = so.status === 'EN_REVISION';
   const canCancel = ['PROGRAMADA', 'NOTIFICADA', 'CONFIRMADA', 'REAGENDADA'].includes(so.status);
   const canResched = canCancel;
+
+  const setEqCondition = async (equipmentId: string, condition: string) => {
+    const equipments = ((so as any).equipments || []).map((e: any) => (e.equipmentId === equipmentId ? { ...e, condition } : e));
+    try { await actions.update(so.id, { equipments } as any); } catch (e: any) { toast(e?.message || 'Error', 'error'); }
+  };
 
   const approve = async () => {
     setBusy(true);
@@ -202,6 +207,16 @@ export default function ServiceOrderDetail({ ctx, id }: { ctx: AppCtx; id: strin
               </div>
               <div className="mono" style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 10 }}>
                 {[e.equipmentSnapshot?.brand, e.equipmentSnapshot?.model].filter(Boolean).join(' ')}{e.equipmentSnapshot?.serial ? ` · S/N ${e.equipmentSnapshot.serial}` : ''}{e.equipmentSnapshot?.location ? ` · ${e.equipmentSnapshot.location}` : ''}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{t('equipment.condition')}:</span>
+                {isAdmin ? (
+                  <Select value={e.condition || 'operativo'} onChange={(ev: any) => setEqCondition(e.equipmentId, ev.target.value)} style={{ maxWidth: 220 }}>
+                    {CONDITIONS.map((c) => <option key={c} value={c}>{t('equipment.cond_' + c)}</option>)}
+                  </Select>
+                ) : (
+                  <EquipmentConditionBadge condition={e.condition} size="sm" />
+                )}
               </div>
               {(e.checklist?.length || 0) > 0
                 ? <DynamicChecklist items={e.checklist as any} mode="readonly" />

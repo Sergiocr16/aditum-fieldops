@@ -159,9 +159,15 @@ export async function createContractWithNumber(
   return { id: ref.id, num };
 }
 
+/** Estado/condición de un equipo. */
+export type EquipmentCondition = 'operativo' | 'mal_estado' | 'en_reparacion' | 'fuera_servicio';
+export const EQUIPMENT_CONDITIONS: EquipmentCondition[] = ['operativo', 'mal_estado', 'en_reparacion', 'fuera_servicio'];
+export interface ConditionEntry { condition: EquipmentCondition; at: string; by: string; orderId?: string | null; orderNum?: string | null; note?: string }
+
 export interface NewEquipmentInput {
   contractId: string;
   typeId: string;
+  condition?: EquipmentCondition;
   brand?: string;
   model?: string;
   serial?: string;
@@ -198,6 +204,8 @@ export function buildEquipmentDoc(input: NewEquipmentInput, by: string) {
     lastServiceDate: null as string | null,
     notes: input.notes || '',
     active: true,
+    condition: (input.condition && EQUIPMENT_CONDITIONS.includes(input.condition) ? input.condition : 'operativo') as EquipmentCondition,
+    conditionHistory: [] as ConditionEntry[],
     importBatchId: null as string | null,
     createdAt: ts,
     updatedAt: ts,
@@ -371,6 +379,7 @@ export interface SOEquipment {
   checklistTemplateId: string | null;
   checklistTemplateVersion: number | null;
   checklist: any[];
+  condition?: EquipmentCondition; // estado del equipo registrado en esta orden
 }
 
 export interface NewServiceOrderInput {
@@ -382,7 +391,7 @@ export interface NewServiceOrderInput {
   equipmentId?: string | null;
   equipmentSnapshot?: EquipmentSnapshot | null;
   /** Varios equipos en una sola orden (periódico/correctivo). Cada uno trae su checklist al iniciar. */
-  equipments?: { equipmentId: string; equipmentSnapshot: EquipmentSnapshot }[];
+  equipments?: { equipmentId: string; equipmentSnapshot: EquipmentSnapshot; condition?: EquipmentCondition }[];
   client: { name: string; email: string; phone: string };
   techId: string | null;
   planDate: string;        // occurrence date (immutable)
@@ -439,6 +448,7 @@ export function buildServiceOrderDoc(input: NewServiceOrderInput, by: string) {
       checklistTemplateId: null as string | null,
       checklistTemplateVersion: null as number | null,
       checklist: [] as any[],
+      condition: (e.condition && EQUIPMENT_CONDITIONS.includes(e.condition) ? e.condition : 'operativo') as EquipmentCondition,
     })),
     client: input.client,
     techId: input.techId || null,

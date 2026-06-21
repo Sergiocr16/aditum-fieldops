@@ -404,6 +404,7 @@ export const getPublicServiceReport = onCall(async (req) => {
       // Multi-equipo: cada equipo con su snapshot + checklist saneado.
       equipments: soEquipments(so).map((e: any) => ({
         equipmentSnapshot: e.equipmentSnapshot || null,
+        condition: e.condition || 'operativo',
         checklistTemplateVersion: e.checklistTemplateVersion || null,
         checklist: (e.checklist || []).map((c: any) => ({
           sectionTitle: c.sectionTitle || null,

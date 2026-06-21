@@ -10,9 +10,11 @@
   escriben en `history` y respetan `SO_TRANSITIONS` (ver `shared`).
 - **Reglas como segunda capa**: mantené `firestore.rules`/`storage.rules` estrictas. El técnico solo
   lee/escribe órdenes donde `techId == auth.uid`, en `EN_PROGRESO`, y solo la lista blanca de campos
-  (`status,checklist,photos,evidence,visits,materials,materialsNote,observations,techObs,readyAt` — los
-  `equipments[]` y los `segments` de fichaje van dentro de `visits`/`equipments`). Si agregás un campo que
-  el técnico escribe, sumalo a esa lista. `start/complete/approve/reject` van por **callable** (Admin SDK).
+  (`equipments,checklist,photos,evidence,visits,materials,materialsNote,observations,techObs,readyAt` — el
+  checklist/condición por equipo va dentro de `equipments[]`; los `segments` de fichaje dentro de `visits`).
+  Si agregás un campo que el técnico escribe, sumalo a esa lista. `start/complete/approve/reject` van por
+  **callable** (Admin SDK). El doc `equipment` solo lo escribe `isOps`; la condición fijada por el técnico
+  en la orden se propaga al equipo desde el trigger.
 - **Storage**: rutas `tenants/{tid}/serviceOrders/{id}/...` y `.../wiki/{pageId}/...`. Valida `contentType`
   y tamaño (img/video/pdf ≤200MB). La compresión de video la hace `onEvidenceFinalized` (tickets y serviceOrders).
 - **Vista pública**: SOLO vía callable con token — `getPublicServiceReport` (`/r/:token`) y, legacy,

@@ -151,6 +151,19 @@ export function SOStatusBadge({ status, size }: any) {
     </span>
   );
 }
+/** Estados de equipo + clase de color (reusa --st-*). */
+export const CONDITIONS = ['operativo', 'mal_estado', 'en_reparacion', 'fuera_servicio'] as const;
+const CONDITION_CLS: Record<string, string> = { operativo: 'apro', mal_estado: 'revi', en_reparacion: 'asig', fuera_servicio: 'rech' };
+export function EquipmentConditionBadge({ condition, size }: { condition?: string; size?: string }) {
+  const { t } = useTranslation();
+  const c = condition || 'operativo';
+  return (
+    <span className={'badge ' + (size || '') + ' bg-' + (CONDITION_CLS[c] || 'pend')}>
+      <span className="dot" />
+      {t('equipment.cond_' + c)}
+    </span>
+  );
+}
 export function PriorityChip({ priority }: any) {
   const { t } = useTranslation();
   const p = PRIORITY[priority as keyof typeof PRIORITY];

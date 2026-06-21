@@ -500,6 +500,31 @@ export const onServiceOrderWritten = onDocumentWritten(
           logger.error('cadencia: fallo recalculando próxima visita', e as Error);
         }
       }
+
+      // 5) propagar la CONDICIÓN de cada equipo al equipo maestro + historial (idempotente)
+      if (!after.conditionApplied) {
+        try {
+          const at = nowCR();
+          const by = (after.signature?.name) || 'sistema';
+          for (const e of soEquipments(after)) {
+            if (!e.equipmentId || !e.condition) continue;
+            const eqRef = tcol(tid, 'equipment').doc(e.equipmentId);
+            const eqSnap = await eqRef.get();
+            if (!eqSnap.exists) continue;
+            const cur = (eqSnap.data() as any).condition || 'operativo';
+            if (cur === e.condition) continue; // sin cambio → no duplica historial
+            const hist = (eqSnap.data() as any).conditionHistory || [];
+            await eqRef.set({
+              condition: e.condition,
+              conditionHistory: [...hist, { condition: e.condition, at, by, orderId: soId, orderNum: after.num || null }],
+              updatedAt: at,
+            }, { merge: true });
+          }
+          await ref.set({ conditionApplied: true }, { merge: true });
+        } catch (e) {
+          logger.error('condición: fallo propagando estado de equipos', e as Error);
+        }
+      }
     }
   }
 );
