@@ -76,14 +76,14 @@ export default function ContractDetail({ ctx, id }: { ctx: AppCtx; id: string })
 
       <div className="detail-grid">
         <div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-            <button className="chip" style={tab === 'equipment' ? { background: 'var(--navy-800)', color: '#fff', cursor: 'pointer' } : { cursor: 'pointer' }} onClick={() => setTab('equipment')}>
+          <div className="seg" role="tablist" style={{ marginBottom: 14 }}>
+            <button role="tab" aria-selected={tab === 'equipment'} className={tab === 'equipment' ? 'on' : ''} onClick={() => setTab('equipment')}>
               {t('contracts.tabEquipment', { n: eq.equipment.length })}
             </button>
-            <button className="chip" style={tab === 'orders' ? { background: 'var(--navy-800)', color: '#fff', cursor: 'pointer' } : { cursor: 'pointer' }} onClick={() => setTab('orders')}>
+            <button role="tab" aria-selected={tab === 'orders'} className={tab === 'orders' ? 'on' : ''} onClick={() => setTab('orders')}>
               {t('contracts.tabOrders', { n: serviceOrders.length })}
             </button>
-            <button className="chip" style={tab === 'activity' ? { background: 'var(--navy-800)', color: '#fff', cursor: 'pointer' } : { cursor: 'pointer' }} onClick={() => setTab('activity')}>
+            <button role="tab" aria-selected={tab === 'activity'} className={tab === 'activity' ? 'on' : ''} onClick={() => setTab('activity')}>
               {t('contracts.tabActivity')}
             </button>
           </div>

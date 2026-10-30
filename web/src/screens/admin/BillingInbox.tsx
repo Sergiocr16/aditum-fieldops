@@ -158,17 +158,17 @@ export default function BillingInbox({ ctx }: { ctx: AppCtx }) {
       />
 
       <div className="card" style={{ marginBottom: 16, padding: '12px 16px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="seg" role="tablist">
           {(['pendiente', 'facturas', 'facturado'] as const).map((k) => (
-            <button key={k} className="chip" style={tab === k ? { background: 'var(--navy-800)', color: '#fff', cursor: 'pointer' } : { cursor: 'pointer' }} onClick={() => { setTab(k); setSelected(new Set()); }}>
+            <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => { setTab(k); setSelected(new Set()); }}>
               {t('billing.tab_' + k)}
             </button>
           ))}
         </div>
         {tab !== 'facturas' && (
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', paddingLeft: 8, borderLeft: '1px solid var(--border)' }}>
+          <div className="seg" role="tablist">
             {(['all', 'ot', 'os'] as const).map((k) => (
-              <button key={k} className="chip" style={fKind === k ? { background: 'var(--gold-100, var(--gold-50))', color: 'var(--gold-600)', borderColor: 'var(--gold-300, var(--gold-50))', cursor: 'pointer' } : { cursor: 'pointer' }} onClick={() => { setFKind(k); setSelected(new Set()); }}>
+              <button key={k} role="tab" aria-selected={fKind === k} className={fKind === k ? 'on' : ''} onClick={() => { setFKind(k); setSelected(new Set()); }}>
                 {t('billing.kind_' + k)}
               </button>
             ))}
