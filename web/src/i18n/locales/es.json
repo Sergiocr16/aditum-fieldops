@@ -1150,9 +1150,7 @@
     "newInvoice": "Nueva factura",
     "bill": "Facturar",
     "billBtn": "Facturar ({{n}})",
-    "kind_all": "Todas",
-    "kind_ot": "Órdenes de trabajo",
-    "kind_os": "Órdenes de servicio"
+    "kind_all": "Todas"
   },
   "publicConfirm": {
     "title": "Confirmá tu visita de mantenimiento",
@@ -1280,8 +1278,6 @@
     "invoiced": "Facturado",
     "pendingShort": "Por facturar",
     "invoicedShort": "Facturado",
-    "kindTicket": "OT",
-    "kindSo": "OS",
     "receptor": "Receptor (cliente fiscal)",
     "receptorHint": "Si no se asigna, no se emite factura electrónica",
     "chargeType": "Tipo de cargo",

@@ -1150,9 +1150,7 @@
     "newInvoice": "New invoice",
     "bill": "Bill",
     "billBtn": "Bill ({{n}})",
-    "kind_all": "All",
-    "kind_ot": "Work orders",
-    "kind_os": "Service orders"
+    "kind_all": "All"
   },
   "publicConfirm": {
     "title": "Confirm your maintenance visit",
@@ -1280,8 +1278,6 @@
     "invoiced": "Invoiced",
     "pendingShort": "To invoice",
     "invoicedShort": "Invoiced",
-    "kindTicket": "WO",
-    "kindSo": "SO",
     "receptor": "Recipient (tax client)",
     "receptorHint": "If unset, no e-invoice is issued",
     "chargeType": "Charge type",

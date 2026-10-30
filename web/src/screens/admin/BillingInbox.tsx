@@ -39,7 +39,7 @@ export default function BillingInbox({ ctx }: { ctx: AppCtx }) {
   const invoices = useInvoices();
   const clients = useClients();
   const [fContract, setFContract] = useState('');
-  const [fKind, setFKind] = useState<'all' | 'ot' | 'os'>('all');
+  const [fKind, setFKind] = useState<'all' | 'demanda' | 'periodico'>('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [acting, setActing] = useState('');
@@ -48,13 +48,13 @@ export default function BillingInbox({ ctx }: { ctx: AppCtx }) {
   const [ncReason, setNcReason] = useState('');
 
   const clientName = (id?: string | null) => clients.items.find((c) => c.id === id)?.name || '—';
-  const isOT = (i: any) => i.kind === 'ticket';
+  // Modalidad del ítem: los de tickets viejos (kind 'ticket') son trabajo por demanda.
+  const itemMode = (i: any): 'demanda' | 'periodico' => (i.kind === 'ticket' || i.mode === 'demanda' ? 'demanda' : 'periodico');
   const filtered = useMemo(
     () =>
       items.filter((i) => {
         if (fContract && i.contractId !== fContract) return false;
-        if (fKind === 'ot' && !isOT(i)) return false;
-        if (fKind === 'os' && isOT(i)) return false;
+        if (fKind !== 'all' && itemMode(i) !== fKind) return false;
         return true;
       }),
     [items, fContract, fKind]
@@ -127,6 +127,7 @@ export default function BillingInbox({ ctx }: { ctx: AppCtx }) {
     const rows = filtered.map((i) => ({
       Orden: i.soNum,
       Tipo: t('serviceOrders.type_' + i.type),
+      Modalidad: t('serviceOrders.mode_' + itemMode(i)),
       Contrato: contracts.find((c) => c.id === i.contractId)?.num || '',
       'Licitación': i.licitacionNum,
       Cliente: i.clientName,
@@ -167,9 +168,9 @@ export default function BillingInbox({ ctx }: { ctx: AppCtx }) {
         </div>
         {tab !== 'facturas' && (
           <div className="seg" role="tablist">
-            {(['all', 'ot', 'os'] as const).map((k) => (
+            {(['all', 'demanda', 'periodico'] as const).map((k) => (
               <button key={k} role="tab" aria-selected={fKind === k} className={fKind === k ? 'on' : ''} onClick={() => { setFKind(k); setSelected(new Set()); }}>
-                {t('billing.kind_' + k)}
+                {k === 'all' ? t('billing.kind_all') : t('serviceOrders.mode_' + k)}
               </button>
             ))}
           </div>
@@ -272,8 +273,8 @@ export default function BillingInbox({ ctx }: { ctx: AppCtx }) {
                     <td className="mono" style={{ fontWeight: 700 }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
                         {i.soNum}
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99, letterSpacing: '.02em', ...(i.kind === 'ticket' ? { background: 'var(--gold-50)', color: 'var(--gold-600)' } : { background: 'var(--surface-2)', color: 'var(--text-2)' }) }}>
-                          {i.kind === 'ticket' ? t('ticketBilling.kindTicket') : t('ticketBilling.kindSo')}
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99, letterSpacing: '.02em', ...(itemMode(i) === 'demanda' ? { background: 'var(--gold-50)', color: 'var(--gold-600)' } : { background: 'var(--surface-2)', color: 'var(--text-2)' }) }}>
+                          {t('serviceOrders.mode_' + itemMode(i))}
                         </span>
                       </span>
                     </td>
