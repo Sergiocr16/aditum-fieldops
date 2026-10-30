@@ -37,3 +37,6 @@ ui-debug.log
 
 # carpeta fuente del icono (los usados están en web/public)
 icono_field_ops/
+
+# Secrets locales del emulador de Functions (nunca commitear)
+functions/.secret.local

@@ -6,7 +6,6 @@ import { z } from 'zod';
 import { randomBytes } from 'crypto';
 import type { firestore, auth } from 'firebase-admin';
 import {
-  createTicketWithNumber,
   buildVisit,
   createContractWithNumber,
   createServiceOrderWithNumber,
@@ -26,6 +25,7 @@ import {
   initialsOf,
   WEEKDAY_KEYS,
   STATUSES,
+  SO_STATUSES,
   WIKI_STATUSES,
   PERIODICITIES,
   PeriodicityMonths,
@@ -69,14 +69,6 @@ export function registerTools(server: McpServer, db: Db, tenantId: string, actor
     return snap.docs.find((d) => ((d.data() as any).email || '').toLowerCase() === key) || null;
   }
 
-  let cachedPrefix: string | null = null;
-  async function ticketPrefix(): Promise<string> {
-    if (cachedPrefix) return cachedPrefix;
-    const t = await db.collection('tenants').doc(tenantId).get();
-    cachedPrefix = (t.exists && (t.data() as any).numbering?.ticketPrefix) || 'AD';
-    return cachedPrefix!;
-  }
-
   async function findTechId(nameOrId?: string | null): Promise<{ id: string | null; name?: string }> {
     if (!nameOrId) return { id: null };
     const direct = await db.collection('users').doc(nameOrId).get();
@@ -89,19 +81,55 @@ export function registerTools(server: McpServer, db: Db, tenantId: string, actor
     return match ? { id: match.id, name: (match.data() as any).name } : { id: null };
   }
 
+  /* Órdenes de trabajo (ex tickets) = órdenes de servicio por demanda (`serviceOrders`, mode 'demanda').
+     Busca primero en serviceOrders (incluye las migradas, que conservan id y número AD-####) y,
+     como respaldo, en la colección legacy `tickets` (solo lectura: la UI ya no la muestra). */
   async function findTicket(idOrNum: string) {
-    let doc = await tcol('tickets').doc(idOrNum).get();
+    const key = idOrNum.trim();
+    let doc = await tcol('serviceOrders').doc(key).get();
     if (!doc.exists) {
-      const snap = await tcol('tickets').where('num', '==', idOrNum).limit(1).get();
+      const snap = await tcol('serviceOrders').where('num', '==', key.toUpperCase()).limit(1).get();
       if (!snap.empty) doc = snap.docs[0];
     }
     return doc.exists ? doc : null;
   }
 
-  /* ---------------- tickets ---------------- */
+  async function findLegacyTicket(idOrNum: string) {
+    const key = idOrNum.trim();
+    let doc = await tcol('tickets').doc(key).get();
+    if (!doc.exists) {
+      const snap = await tcol('tickets').where('num', '==', key.toUpperCase()).limit(1).get();
+      if (!snap.empty) doc = snap.docs[0];
+    }
+    return doc.exists ? doc : null;
+  }
+
+  async function osPrefix(): Promise<string> {
+    const t = await db.collection('tenants').doc(tenantId).get();
+    return (t.exists && (t.data() as any).numbering?.osPrefix) || 'OS';
+  }
+
+  /** Estados viejos de OT → estado unificado de orden (misma tabla que seed/migrate-tickets-to-orders.mjs). */
+  function legacyToSOStatus(s: string): ServiceOrderStatus {
+    switch (s) {
+      case 'pendiente':
+      case 'asignado': return 'PROGRAMADA';
+      case 'en_proceso':
+      case 'rechazado': return 'EN_PROGRESO';
+      case 'listo_revision': return 'EN_REVISION';
+      case 'aprobado':
+      case 'cerrado': return 'CERRADA';
+      default: return s as ServiceOrderStatus;
+    }
+  }
+
+  const ORDER_NOT_FOUND = 'orden no encontrada (probá con el id o el número, p. ej. AD-1005 / OS-1001)';
+
+
+  /* ---------------- órdenes de trabajo (por demanda) ---------------- */
   server.tool(
     'create_ticket',
-    'Crea un ticket de trabajo técnico en Aditum FieldOps. Devuelve el número asignado.',
+    'Crea una orden de trabajo (orden de servicio por demanda) en Aditum FieldOps. Devuelve el número asignado (prefijo de órdenes del tenant, p. ej. OS-####).',
     {
       title: z.string().describe('Título del trabajo'),
       client: z.string().describe('Cliente / condominio / empresa'),
@@ -109,8 +137,9 @@ export function registerTools(server: McpServer, db: Db, tenantId: string, actor
       address: z.string().optional().describe('Dirección o referencia'),
       priority: z.enum(['baja', 'media', 'alta', 'urgente']).optional(),
       technician: z.string().optional().describe('Nombre, correo o id del técnico a asignar'),
-      scheduled: z.string().optional().describe('Fecha programada YYYY-MM-DD'),
-      deadline: z.string().optional().describe('Fecha límite YYYY-MM-DD'),
+      scheduled: z.string().optional().describe('Fecha programada YYYY-MM-DD (def hoy)'),
+      scheduledTime: z.string().optional().describe('Hora HH:mm (def 08:00)'),
+      deadline: z.string().optional().describe('Fecha límite YYYY-MM-DD (se anota en las notas de la orden)'),
       description: z.string().optional(),
       instructions: z.string().optional(),
       expected: z.string().optional().describe('Resultado esperado'),
@@ -118,28 +147,51 @@ export function registerTools(server: McpServer, db: Db, tenantId: string, actor
       observations: z.string().optional(),
       evidenceReq: z.string().optional().describe('Instrucciones de evidencia (qué grabar/fotografiar)'),
       checklist: z.array(z.string()).optional().describe('Ítems del checklist'),
+      requiresInvoice: z.boolean().optional().describe('¿Se factura al aprobar? (def no)'),
     },
     async (args) => {
       const tech = await findTechId(args.technician);
-      const input = {
-        title: args.title,
-        client: args.client,
-        site: args.site,
-        address: args.address,
-        priority: args.priority,
-        techId: tech.id,
-        scheduled: args.scheduled,
-        deadline: args.deadline,
-        description: args.description,
-        instructions: args.instructions,
-        expected: args.expected,
-        doneConditions: args.doneConditions,
-        observations: args.observations,
-        evidenceReq: args.evidenceReq,
-        checklist: (args.checklist || []).map((text) => ({ text })),
-      };
-      const res = await createTicketWithNumber(db, tenantId, input, BY, tech.name, await ticketPrefix());
-      return ok({ created: true, id: res.id, num: res.num, technician: tech.name || null });
+      if (args.technician && !tech.id) return ok({ created: false, error: 'técnico no encontrado' });
+      const date = (args.scheduled || nowCR().slice(0, 10)).trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return ok({ created: false, error: 'scheduled debe ser YYYY-MM-DD' });
+      if (!args.title.trim() || !args.client.trim()) return ok({ created: false, error: 'title y client son requeridos' });
+      const notes = args.deadline ? `Fecha límite: ${args.deadline}` : '';
+      const res = await createServiceOrderWithNumber(
+        db,
+        tenantId,
+        {
+          type: 'correctivo',
+          mode: 'demanda',
+          contractId: null,
+          equipmentId: null,
+          equipmentSnapshot: null,
+          client: { name: args.client.trim(), email: '', phone: '' },
+          techId: tech.id,
+          planDate: date,
+          scheduledDate: date,
+          scheduledTime: args.scheduledTime,
+          skipNotice: true,
+          notes,
+          title: args.title.trim(),
+          site: args.site,
+          address: args.address,
+          priority: args.priority,
+          description: args.description,
+          instructions: args.instructions,
+          expected: args.expected,
+          doneConditions: args.doneConditions,
+          evidenceReq: args.evidenceReq,
+          checklistItems: args.checklist || [],
+          requiresReview: true,
+          requiresInvoice: !!args.requiresInvoice,
+        } as any,
+        BY,
+        await osPrefix()
+      );
+      if (args.observations && res.created) {
+        await tcol('serviceOrders').doc(res.id).set({ observations: args.observations }, { merge: true });
+      }
+      return ok({ created: res.created, id: res.id, num: res.num, technician: tech.name || null });
     }
   );
 
@@ -305,138 +357,150 @@ export function registerTools(server: McpServer, db: Db, tenantId: string, actor
     }
   );
 
+  const ANY_STATUS = [...STATUSES, ...SO_STATUSES] as [string, ...string[]];
+
   server.tool(
     'list_tickets',
-    'Lista tickets con filtros opcionales por estado y técnico.',
-    { status: z.enum(STATUSES as [string, ...string[]]).optional(), technician: z.string().optional(), limit: z.number().optional() },
+    'Lista órdenes de trabajo (órdenes por demanda) con filtros opcionales por estado y técnico. Acepta estados viejos (pendiente, en_proceso, ...) o nuevos (PROGRAMADA, EN_PROGRESO, EN_REVISION, ...).',
+    { status: z.enum(ANY_STATUS).optional(), technician: z.string().optional(), limit: z.number().optional() },
     async (args) => {
-      let q: firestore.Query = tcol('tickets');
-      if (args.status) q = q.where('status', '==', args.status);
+      let q: firestore.Query = tcol('serviceOrders').where('mode', '==', 'demanda');
+      if (args.status) q = q.where('status', '==', legacyToSOStatus(args.status));
       if (args.technician) {
         const tech = await findTechId(args.technician);
-        if (tech.id) q = q.where('techId', '==', tech.id);
+        if (!tech.id) return ok({ ok: false, error: 'técnico no encontrado' });
+        q = q.where('techId', '==', tech.id);
       }
       const snap = await q.limit(args.limit || 50).get();
       const rows = snap.docs.map((d) => {
         const t = d.data() as any;
-        return { id: d.id, num: t.num, title: t.title, client: t.client, site: t.site, status: t.status, priority: t.priority, techId: t.techId };
+        return { id: d.id, num: t.num, title: t.title, client: t.client?.name ?? t.client, site: t.site, status: t.status, priority: t.priority, techId: t.techId, scheduledDate: t.scheduledDate };
       });
       return ok(rows);
     }
   );
 
-  server.tool('get_ticket', 'Obtiene un ticket por id o por número.', { idOrNum: z.string() }, async (args) => {
+  server.tool('get_ticket', 'Obtiene una orden de trabajo por id o por número (AD-#### u OS-####).', { idOrNum: z.string() }, async (args) => {
     const doc = await findTicket(args.idOrNum);
-    if (!doc) return ok({ found: false });
-    return ok({ found: true, id: doc.id, ...(doc.data() as any) });
+    if (doc) return ok({ found: true, id: doc.id, ...(doc.data() as any) });
+    const legacy = await findLegacyTicket(args.idOrNum);
+    if (legacy) return ok({ found: true, legacy: true, note: 'Documento de la colección vieja `tickets` (no migrado a órdenes).', id: legacy.id, ...(legacy.data() as any) });
+    return ok({ found: false });
   });
 
-  server.tool('assign_ticket', 'Asigna o reasigna un ticket a un técnico.', { idOrNum: z.string(), technician: z.string() }, async (args) => {
+  server.tool('assign_ticket', 'Asigna o reasigna una orden de trabajo a un técnico.', { idOrNum: z.string(), technician: z.string() }, async (args) => {
     const doc = await findTicket(args.idOrNum);
-    if (!doc) return ok({ ok: false, error: 'not found' });
+    if (!doc) return ok({ ok: false, error: ORDER_NOT_FOUND });
     const tech = await findTechId(args.technician);
     if (!tech.id) return ok({ ok: false, error: 'technician not found' });
     const t = doc.data() as any;
     await doc.ref.set(
-      {
-        techId: tech.id,
-        status: t.status === 'pendiente' ? 'asignado' : t.status,
-        history: [...(t.history || []), { status: 'asignado', at: nowCR(), by: BY, note: 'Asignado a ' + tech.name }],
-      },
+      { techId: tech.id, history: [...(t.history || []), { status: t.status, at: nowCR(), by: BY, note: 'Asignada a ' + tech.name }] },
       { merge: true }
     );
     return ok({ ok: true, num: t.num, technician: tech.name });
   });
 
-  server.tool('add_checklist_items', 'Agrega ítems al checklist de un ticket existente.', { idOrNum: z.string(), items: z.array(z.string()) }, async (args) => {
+  server.tool('add_checklist_items', 'Agrega ítems al checklist de una orden de trabajo existente.', { idOrNum: z.string(), items: z.array(z.string()) }, async (args) => {
     const doc = await findTicket(args.idOrNum);
-    if (!doc) return ok({ ok: false, error: 'not found' });
+    if (!doc) return ok({ ok: false, error: ORDER_NOT_FOUND });
     const t = doc.data() as any;
-    const newItems = args.items.filter((x) => x.trim()).map((text, i) => ({ id: 'm' + Date.now() + i, text: text.trim(), done: false, by: null, at: null }));
+    const newItems = args.items.filter((x) => x.trim()).map((text, i) => ({ id: 'm' + Date.now() + i, text: text.trim(), done: false, by: null, at: null, visitId: null }));
     await doc.ref.set({ checklist: [...(t.checklist || []), ...newItems] }, { merge: true });
     return ok({ ok: true, added: newItems.length });
   });
 
-  /* ---------------- tickets: ciclo de vida ---------------- */
+  /* ---------------- órdenes de trabajo: ciclo de vida (mismas reglas que las callables approve/rejectServiceOrder) ---------------- */
   server.tool(
     'approve_ticket',
-    'Aprueba un ticket (estado aprobado). El trigger dispara el correo y rebaja el inventario.',
+    'Aprueba una orden en revisión → PENDIENTE_FACTURAR (si se factura) o CERRADA. El trigger genera el reporte público, rebaja el inventario y crea el ítem de facturación.',
     { idOrNum: z.string(), comment: z.string().optional() },
     async (args) => {
       const doc = await findTicket(args.idOrNum);
-      if (!doc) return ok({ ok: false, error: 'ticket no encontrado' });
-      const t = doc.data() as any;
+      if (!doc) return ok({ ok: false, error: ORDER_NOT_FOUND });
+      const so = doc.data() as any;
+      if (so.status !== 'EN_REVISION' && so.status !== 'SERVICIO_TERMINADO') {
+        return ok({ ok: false, error: `la orden no está en revisión (estado: ${so.status})` });
+      }
+      const shouldBill = (so.mode || 'periodico') === 'periodico' || so.requiresInvoice === true;
+      const next = shouldBill ? 'PENDIENTE_FACTURAR' : 'CERRADA';
       const at = nowCR();
-      const text = (args.comment || '').trim() || 'Aprobado';
+      const text = (args.comment || '').trim();
       await doc.ref.set(
         {
-          status: 'aprobado',
+          status: next,
           approval: { at, by: actor, comment: text },
-          comments: [...(t.comments || []), { type: 'aprobacion', by: BY, at, text }],
-          history: [...(t.history || []), { status: 'aprobado', at, by: BY }],
+          comments: [...(so.comments || []), { type: 'aprobacion', by: BY, at, text: text || 'Orden aprobada' }],
+          history: [...(so.history || []), { status: next, at, by: BY, note: 'Aprobada' }],
         },
         { merge: true }
       );
-      return ok({ ok: true, num: t.num, status: 'aprobado' });
+      return ok({ ok: true, num: so.num, status: next });
     }
   );
 
   server.tool(
     'reject_ticket',
-    'Rechaza un ticket (estado rechazado) con un comentario de corrección. El trigger avisa al técnico.',
+    'Rechaza una orden en revisión → EN_PROGRESO, con un comentario de corrección para el técnico.',
     { idOrNum: z.string(), comment: z.string() },
     async (args) => {
       const doc = await findTicket(args.idOrNum);
-      if (!doc) return ok({ ok: false, error: 'ticket no encontrado' });
-      const t = doc.data() as any;
+      if (!doc) return ok({ ok: false, error: ORDER_NOT_FOUND });
+      const so = doc.data() as any;
+      if (so.status !== 'EN_REVISION' && so.status !== 'SERVICIO_TERMINADO') {
+        return ok({ ok: false, error: `la orden no está en revisión (estado: ${so.status})` });
+      }
+      if (!args.comment.trim()) return ok({ ok: false, error: 'el motivo del rechazo es requerido' });
       const at = nowCR();
       await doc.ref.set(
         {
-          status: 'rechazado',
-          comments: [...(t.comments || []), { type: 'rechazo', by: BY, at, text: args.comment }],
-          history: [...(t.history || []), { status: 'rechazado', at, by: BY, note: 'Requiere corrección' }],
+          status: 'EN_PROGRESO',
+          comments: [...(so.comments || []), { type: 'rechazo', by: BY, at, text: args.comment.trim() }],
+          history: [...(so.history || []), { status: 'EN_PROGRESO', at, by: BY, note: 'Rechazada: ' + args.comment.trim() }],
         },
         { merge: true }
       );
-      return ok({ ok: true, num: t.num, status: 'rechazado' });
+      return ok({ ok: true, num: so.num, status: 'EN_PROGRESO' });
     }
   );
 
-  server.tool('close_ticket', 'Cierra un ticket (estado cerrado).', { idOrNum: z.string() }, async (args) => {
+  server.tool('close_ticket', 'Cierra una orden de trabajo (estado CERRADA).', { idOrNum: z.string() }, async (args) => {
     const doc = await findTicket(args.idOrNum);
-    if (!doc) return ok({ ok: false, error: 'ticket no encontrado' });
-    const t = doc.data() as any;
+    if (!doc) return ok({ ok: false, error: ORDER_NOT_FOUND });
+    const so = doc.data() as any;
+    if (so.status === 'CERRADA' || so.status === 'CANCELADA') return ok({ ok: true, num: so.num, status: so.status, note: 'ya estaba cerrada/cancelada' });
     const at = nowCR();
-    await doc.ref.set({ status: 'cerrado', history: [...(t.history || []), { status: 'cerrado', at, by: BY, note: 'Obra cerrada' }] }, { merge: true });
-    return ok({ ok: true, num: t.num, status: 'cerrado' });
+    await doc.ref.set({ status: 'CERRADA', history: [...(so.history || []), { status: 'CERRADA', at, by: BY, note: 'Cerrada' }] }, { merge: true });
+    return ok({ ok: true, num: so.num, status: 'CERRADA' });
   });
 
   server.tool(
     'set_ticket_status',
-    'Cambia el estado de un ticket (genérico: pendiente, asignado, en_proceso, listo_revision, aprobado, rechazado, cerrado).',
-    { idOrNum: z.string(), status: z.enum(STATUSES as [string, ...string[]]), note: z.string().optional() },
+    'Cambia el estado de una orden de trabajo (override de admin). Acepta estados nuevos (PROGRAMADA, EN_PROGRESO, SERVICIO_TERMINADO, EN_REVISION, PENDIENTE_FACTURAR, FACTURADA, CERRADA, CANCELADA) o los viejos (se traducen).',
+    { idOrNum: z.string(), status: z.enum(ANY_STATUS), note: z.string().optional() },
     async (args) => {
       const doc = await findTicket(args.idOrNum);
-      if (!doc) return ok({ ok: false, error: 'ticket no encontrado' });
-      const t = doc.data() as any;
+      if (!doc) return ok({ ok: false, error: ORDER_NOT_FOUND });
+      const so = doc.data() as any;
+      const status = legacyToSOStatus(args.status);
       const at = nowCR();
-      const entry: any = { status: args.status, at, by: BY };
+      const entry: any = { status, at, by: BY };
       if (args.note) entry.note = args.note;
-      await doc.ref.set({ status: args.status, history: [...(t.history || []), entry] }, { merge: true });
-      return ok({ ok: true, num: t.num, status: args.status });
+      await doc.ref.set({ status, history: [...(so.history || []), entry] }, { merge: true });
+      return ok({ ok: true, num: so.num, status, validTransition: canTransition(so.status, status) });
     }
   );
 
   server.tool(
     'add_ticket_comment',
-    'Agrega un comentario interno a un ticket.',
+    'Agrega un comentario interno a una orden de trabajo.',
     { idOrNum: z.string(), text: z.string(), type: z.string().optional() },
     async (args) => {
       const doc = await findTicket(args.idOrNum);
-      if (!doc) return ok({ ok: false, error: 'ticket no encontrado' });
-      const t = doc.data() as any;
-      await doc.ref.set({ comments: [...(t.comments || []), { type: args.type || 'general', by: BY, at: nowCR(), text: args.text }] }, { merge: true });
-      return ok({ ok: true, num: t.num });
+      if (!doc) return ok({ ok: false, error: ORDER_NOT_FOUND });
+      const so = doc.data() as any;
+      await doc.ref.set({ comments: [...(so.comments || []), { type: args.type || 'general', by: BY, at: nowCR(), text: args.text }] }, { merge: true });
+      return ok({ ok: true, num: so.num });
     }
   );
 
@@ -444,7 +508,7 @@ export function registerTools(server: McpServer, db: Db, tenantId: string, actor
     'add_ticket_visit',
     'Registra una visita (un día de trabajo) en una orden de trabajo de varios días. La orden sigue siendo una sola (una factura, un reporte); cada visita guarda qué se hizo ese día.',
     {
-      idOrNum: z.string().describe('Orden de trabajo (id o número AD-####)'),
+      idOrNum: z.string().describe('Orden (id o número AD-#### / OS-####)'),
       note: z.string().describe('Qué se hizo ese día'),
       date: z.string().optional().describe('Fecha de la visita YYYY-MM-DD (def hoy)'),
       technician: z.string().optional().describe('Técnico (nombre/email/id); si se omite, el de la orden'),
@@ -452,9 +516,9 @@ export function registerTools(server: McpServer, db: Db, tenantId: string, actor
     },
     async (args) => {
       const doc = await findTicket(args.idOrNum);
-      if (!doc) return ok({ ok: false, error: 'orden de trabajo no encontrada' });
-      const t = doc.data() as any;
-      let techId: string | null = t.techId || null;
+      if (!doc) return ok({ ok: false, error: ORDER_NOT_FOUND });
+      const so = doc.data() as any;
+      let techId: string | null = so.techId || null;
       let techName = '';
       if (args.technician !== undefined) {
         const tech = await findTechId(args.technician);
@@ -466,13 +530,15 @@ export function registerTools(server: McpServer, db: Db, tenantId: string, actor
         techName = u.exists ? (u.data() as any).name || '' : '';
       }
       const visit = buildVisit({ date: args.date, note: args.note, techId, techName, hours: args.hours }, BY);
-      const patch: any = { visits: [...(t.visits || []), visit] };
-      if (t.status === 'asignado' || t.status === 'pendiente') {
-        patch.status = 'en_proceso';
-        patch.history = [...(t.history || []), { status: 'en_proceso', at: nowCR(), by: BY }];
+      const patch: any = { visits: [...(so.visits || []), visit] };
+      if (['PROGRAMADA', 'NOTIFICADA', 'CONFIRMADA', 'REAGENDADA'].includes(so.status)) {
+        const at = nowCR();
+        patch.status = 'EN_PROGRESO';
+        patch.startedAt = so.startedAt || at;
+        patch.history = [...(so.history || []), { status: 'EN_PROGRESO', at, by: BY }];
       }
       await doc.ref.set(patch, { merge: true });
-      return ok({ ok: true, num: t.num, visitId: visit.id, visits: patch.visits.length });
+      return ok({ ok: true, num: so.num, visitId: visit.id, visits: patch.visits.length });
     }
   );
 

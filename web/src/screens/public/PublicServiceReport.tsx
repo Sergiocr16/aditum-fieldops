@@ -134,7 +134,25 @@ export default function PublicServiceReport() {
           {isDemand && report.description && (
             <p style={{ margin: '14px 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--text-2)' }}>{report.description}</p>
           )}
+          {isDemand && (report.instructions || report.expected) && (
+            <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {report.instructions && <Field label={t('public.instructions')} value={report.instructions} />}
+              {report.expected && <Field label={t('public.expected')} value={report.expected} />}
+            </div>
+          )}
         </div>
+
+        {/* Demanda: lo que hizo el técnico (igual que el link público viejo de las OT) */}
+        {isDemand && (report.techNote || report.techObs) && (
+          <div className="card card-pad" style={{ marginBottom: 20 }}>
+            <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '.06em', margin: '0 0 10px' }}>
+              {t('public.workDone')}
+            </h2>
+            {report.techNote && <p style={{ margin: '0 0 10px', fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{report.techNote}</p>}
+            {report.techObs && <Field label={t('public.techObs')} value={report.techObs} />}
+            {report.readyAt && <div className="mono" style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 8 }}>{t('public.markedReady')}: {report.readyAt}</div>}
+          </div>
+        )}
 
         {/* Demanda: checklist ad-hoc */}
         {isDemand && (report.checklist || []).length > 0 && (
@@ -197,6 +215,16 @@ export default function PublicServiceReport() {
               {t('publicReport.observations')}
             </h2>
             <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6 }}>{report.observations}</p>
+          </div>
+        )}
+
+        {isDemand && report.approval && (
+          <div className="card card-pad" style={{ marginBottom: 20, borderColor: 'var(--st-apro-fg)' }}>
+            <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '.06em', margin: '0 0 10px' }}>
+              {t('public.approval')}
+            </h2>
+            {report.approval.comment && <p style={{ margin: '0 0 6px', fontSize: 14, lineHeight: 1.6 }}>{report.approval.comment}</p>}
+            <div className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>{report.approval.at} · {report.approval.by}</div>
           </div>
         )}
 

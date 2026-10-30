@@ -199,6 +199,7 @@ export function useServiceOrderActions() {
           startedAt: null,
           finishedAt: null,
           reportShare: { active: false, token: null, url: null, created: null, lastVisit: null },
+          materialsApplied: false, // requerido por la rule de update del técnico (igualdad con resource)
           billingApplied: false,
           invoiceItemId: null,
           cadenceApplied: false,

@@ -286,73 +286,108 @@ export const sharePublicLink = onCall({ secrets: [SMTP_USER, SMTP_PASS] }, async
 
 /* ------------------------- evidence finalize (compress video) ------------------------- */
 const LEGACY_TENANT = process.env.LEGACY_TENANT_ID || 'aditum';
+/** Videos por debajo de este tamaño ya son livianos: no se re-codifican. */
+const VIDEO_SKIP_BELOW_BYTES = 4 * 1024 * 1024;
 
-export const onEvidenceFinalized = onObjectFinalized({ memory: '1GiB', timeoutSeconds: 300, region: process.env.STORAGE_REGION || 'us-east1' }, async (event) => {
+/* Compresión de videos subidos (evidencia de órdenes y adjuntos de Wiki).
+   Las fotos se comprimen en el dispositivo (web/src/lib/compressImage.ts) antes de subir.
+
+   El video se re-codifica (H.264 720p, CRF 28, AAC 128k) y se SOBRESCRIBE EN EL MISMO PATH,
+   conservando el token de descarga original: la URL ya guardada en Firestore (evidence.file,
+   attachments[].file) sigue siendo válida sin tocar el documento, así que no hay carrera con
+   el cliente que todavía está registrando la evidencia, ni se borra nada. Si algo falla, el
+   original queda intacto. Rutas:
+     tenants/{tid}/{serviceOrders|tickets}/{docId}/...   (metadata evidenceId)
+     tickets/{docId}/...                                  (legacy pre-tenant)
+     tenants/{tid}/wiki/{pageId}/...                      (adjuntos de Wiki) */
+export const onEvidenceFinalized = onObjectFinalized({ memory: '2GiB', cpu: 2, timeoutSeconds: 540, region: process.env.STORAGE_REGION || 'us-east1' }, async (event) => {
   const object = event.data;
   const filePath = object.name || '';
-  // tenants/{tid}/{tickets|serviceOrders}/{docId}/... — with a legacy fallback for in-flight
-  // uploads under the pre-tenant `tickets/` prefix during the migration window.
+  const meta = (object.metadata || {}) as Record<string, string>;
+  if (meta.compressed === 'true' || filePath.includes('/compressed/')) return; // ya procesado (evita loop)
+
   const parts = filePath.split('/');
-  let tid: string;
-  let coll: 'tickets' | 'serviceOrders';
-  if (parts[0] === 'tenants' && (parts[2] === 'tickets' || parts[2] === 'serviceOrders')) { tid = parts[1]; coll = parts[2] as any; }
-  else if (parts[0] === 'tickets') { tid = LEGACY_TENANT; coll = 'tickets'; }
+  let tid: string | null = null;
+  let docId: string | null = null;
+  let isWiki = false;
+  if (parts[0] === 'tenants' && (parts[2] === 'tickets' || parts[2] === 'serviceOrders')) { tid = parts[1]; docId = parts[3]; }
+  else if (parts[0] === 'tickets') { tid = LEGACY_TENANT; docId = parts[1]; }
+  else if (parts[0] === 'tenants' && parts[2] === 'wiki') { tid = parts[1]; isWiki = true; }
   else return;
-  if (filePath.includes('/compressed/')) return; // already processed
-  const meta = object.metadata || {};
-  const docId = coll === 'serviceOrders' ? (meta.serviceOrderId || meta.ticketId) : meta.ticketId;
-  const evidenceId = meta.evidenceId;
-  if (!docId || !evidenceId) return;
+
+  const evidenceId = meta.evidenceId || null;
+  // Las OT se migraron a serviceOrders con el MISMO id: la evidencia vive en la orden.
+  const orderRef = !isWiki && docId ? await resolveEvidenceDoc(tid!, meta.serviceOrderId || meta.ticketId || docId) : null;
+
   const isVideo = (object.contentType || '').startsWith('video/');
-
-  const ticketId = docId; // reusa el nombre para los paths/metadata abajo
-  const ticketRef = tcol(tid, coll).doc(docId);
-
-  if (!isVideo) {
-    // images/pdf are ready as-is; ensure status flag is set
-    await markEvidenceReady(ticketRef, evidenceId);
+  const size = Number(object.size || 0);
+  if (!isVideo) return; // fotos/pdf: el cliente ya las registra como 'ready'
+  if (size < VIDEO_SKIP_BELOW_BYTES) {
+    if (orderRef && evidenceId) await updateEvidence(orderRef, evidenceId, { status: 'ready' });
     return;
   }
 
+  const os = require('os');
+  const path = require('path');
+  const fs = require('fs');
+  const tmpIn = path.join(os.tmpdir(), 'in-' + randomUUID());
+  const tmpOut = path.join(os.tmpdir(), 'out-' + randomUUID() + '.mp4');
   try {
     const ffmpeg = require('fluent-ffmpeg');
-    const ffmpegPath = require('ffmpeg-static');
-    ffmpeg.setFfmpegPath(ffmpegPath);
-    const os = require('os');
-    const path = require('path');
-    const fs = require('fs');
-
+    ffmpeg.setFfmpegPath(require('ffmpeg-static'));
     const bucket = admin.storage().bucket(object.bucket);
-    const tmpIn = path.join(os.tmpdir(), 'in-' + evidenceId);
-    const tmpOut = path.join(os.tmpdir(), evidenceId + '.mp4');
-    await bucket.file(filePath).download({ destination: tmpIn });
+    const file = bucket.file(filePath);
+    await file.download({ destination: tmpIn });
 
     await new Promise<void>((resolve, reject) => {
       ffmpeg(tmpIn)
-        .outputOptions(['-vcodec libx264', '-crf 28', '-preset veryfast', '-vf', 'scale=-2:720', '-movflags +faststart', '-acodec aac', '-b:a 128k'])
+        .outputOptions([
+          '-vcodec libx264', '-crf 28', '-preset veryfast',
+          // máx 720p sin agrandar videos más chicos; dimensiones pares para libx264
+          '-vf', "scale='if(gt(ih,720),-2,iw)':'if(gt(ih,720),720,ih)',scale=trunc(iw/2)*2:trunc(ih/2)*2",
+          '-pix_fmt yuv420p', '-movflags +faststart', '-acodec aac', '-b:a 128k',
+        ])
         .on('end', () => resolve())
         .on('error', (err: any) => reject(err))
         .save(tmpOut);
     });
 
-    const compressedPath = `tenants/${tid}/${coll}/${ticketId}/compressed/${evidenceId}.mp4`;
-    const downloadToken = randomUUID();
-    await bucket.upload(tmpOut, {
-      destination: compressedPath,
-      metadata: { contentType: 'video/mp4', metadata: { firebaseStorageDownloadTokens: downloadToken, ticketId, evidenceId, compressed: 'true' } },
-    });
-    const url = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(compressedPath)}?alt=media&token=${downloadToken}`;
-
-    await updateEvidence(ticketRef, evidenceId, { status: 'ready', file: url, path: compressedPath });
-    // remove the original to save space (best-effort)
-    bucket.file(filePath).delete().catch(() => {});
-    try { fs.unlinkSync(tmpIn); fs.unlinkSync(tmpOut); } catch {}
-    logger.info(`Compressed video for tenant ${tid} ticket ${ticketId} / evidence ${evidenceId}`);
+    const outSize = fs.statSync(tmpOut).size;
+    if (outSize >= size) {
+      logger.info(`Video ${filePath}: la versión comprimida no es más chica (${outSize} >= ${size}); se deja el original.`);
+    } else {
+      // Releer el token vigente justo antes de sobrescribir (el cliente pudo pedir getDownloadURL).
+      const [current] = await file.getMetadata();
+      const custom = ((current.metadata || {}) as Record<string, string>);
+      const tokens = custom.firebaseStorageDownloadTokens || randomUUID();
+      await bucket.upload(tmpOut, {
+        destination: filePath,
+        metadata: {
+          contentType: 'video/mp4',
+          cacheControl: current.cacheControl,
+          metadata: { ...custom, firebaseStorageDownloadTokens: tokens, compressed: 'true', originalSize: String(size), originalContentType: object.contentType || '' },
+        },
+      });
+      logger.info(`Video comprimido en sitio: ${filePath} ${size} → ${outSize} bytes`);
+      if (orderRef && evidenceId) await updateEvidence(orderRef, evidenceId, { status: 'ready', size: outSize });
+      return;
+    }
+    if (orderRef && evidenceId) await updateEvidence(orderRef, evidenceId, { status: 'ready' });
   } catch (e: any) {
     logger.error('Video compression failed; leaving original.', e);
-    await markEvidenceReady(ticketRef, evidenceId);
+    if (orderRef && evidenceId) await updateEvidence(orderRef, evidenceId, { status: 'ready' });
+  } finally {
+    try { fs.unlinkSync(tmpIn); } catch {}
+    try { fs.unlinkSync(tmpOut); } catch {}
   }
 });
+
+/** serviceOrders/{id} si existe (incluye OT migradas, mismo id); si no, la OT legacy. */
+async function resolveEvidenceDoc(tid: string, id: string): Promise<FirebaseFirestore.DocumentReference> {
+  const so = tcol(tid, 'serviceOrders').doc(id);
+  if ((await so.get()).exists) return so;
+  return tcol(tid, 'tickets').doc(id);
+}
 
 /* ------------------------- email notifications (assignment + status) ------------------------- */
 async function techEmail(tenantId: string, techId?: string | null): Promise<string | null> {
@@ -375,6 +410,9 @@ export const onTicketWritten = onDocumentWritten(
     const after = event.data?.after?.data() as any;
     if (!after) return; // borrado
     const before = event.data?.before?.data() as any;
+    // Escrituras del migrador (seed/migrate-prod-to-service-orders.mjs) no disparan efectos:
+    // cada corrida estampa un `migration.runId` nuevo; si cambió en esta escritura, es la migración.
+    if (after.migration?.runId && after.migration.runId !== before?.migration?.runId) return;
     const tid = event.params.tid;
     const ticket = { id: event.params.id, ...after };
 
@@ -490,15 +528,24 @@ export const onTicketWritten = onDocumentWritten(
   }
 );
 
-async function markEvidenceReady(ticketRef: FirebaseFirestore.DocumentReference, evidenceId: string) {
-  await updateEvidence(ticketRef, evidenceId, { status: 'ready' });
-}
 async function updateEvidence(ticketRef: FirebaseFirestore.DocumentReference, evidenceId: string, patch: any) {
-  await db.runTransaction(async (tx) => {
+  // El cliente registra la evidencia en el doc DESPUÉS de subir el archivo: si todavía no está,
+  // reintenta unos segundos (si nunca aparece, no pasa nada: la URL del archivo sigue válida).
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const found = await updateEvidenceOnce(ticketRef, evidenceId, patch);
+    if (found) return;
+    await new Promise((r) => setTimeout(r, 5000));
+  }
+  logger.warn(`updateEvidence: evidencia ${evidenceId} no encontrada en ${ticketRef.path}`);
+}
+async function updateEvidenceOnce(ticketRef: FirebaseFirestore.DocumentReference, evidenceId: string, patch: any): Promise<boolean> {
+  return db.runTransaction(async (tx) => {
     const snap = await tx.get(ticketRef);
-    if (!snap.exists) return;
+    if (!snap.exists) return false;
     const ev = (snap.data() as any).evidence || [];
+    if (!ev.some((e: any) => e.id === evidenceId)) return false;
     const next = ev.map((e: any) => (e.id === evidenceId ? { ...e, ...patch } : e));
     tx.set(ticketRef, { evidence: next }, { merge: true });
+    return true;
   });
 }

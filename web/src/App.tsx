@@ -47,7 +47,6 @@ import ServiceCalendar from './screens/admin/ServiceCalendar';
 import HoursReport from './screens/admin/HoursReport';
 import TechDashboard from './screens/mobile/MobileDashboard';
 import { TechWikiList, TechWikiPage } from './screens/mobile/MobileWiki';
-import PublicView from './screens/public/PublicView';
 
 function Spinner() {
   return (
@@ -197,7 +196,8 @@ export default function App() {
   return (
     <>
       <Routes>
-        <Route path="/p/:token" element={<PublicView />} />
+        {/* Links viejos de OT (/p/:token): migrados a órdenes de servicio → mismo reporte que /r/. */}
+        <Route path="/p/:token" element={<PublicServiceReport />} />
         <Route path="/r/:token" element={<PublicServiceReport />} />
         <Route path="/confirm/:token" element={<PublicConfirm />} />
         <Route path="/reschedule/:token" element={<PublicReschedule />} />

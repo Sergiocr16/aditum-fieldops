@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 902 912" role="img" aria-labelledby="title desc">
+  <title id="title">Logo con monograma y llave ajustable</title>
+  <desc id="desc">Marca geométrica color marfil con una llave ajustable superpuesta.</desc>
+  <defs>
+    <linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFDF9"/>
+      <stop offset="1" stop-color="#EEE6DC"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="150%" height="150%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="7" dy="9" stdDeviation="7" flood-color="#4A321B" flood-opacity=".38"/>
+    </filter>
+  </defs>
+  <path d="M 591 457 L 593 468 L 680 639 L 685 641 L 706 622 L 729 615 L 728 604 L 633 447 L 621 439 L 607 439 L 595 447 Z M 404 137 L 409 124 L 422 112 L 433 108 L 451 109 L 470 124 L 475 138 L 474 154 L 458 175 L 432 179 L 411 166 L 404 150 Z M 540 384 L 547 378 L 580 403 L 573 409 Z M 112 738 L 386 272 L 387 393 L 252 622 L 408 560 L 408 202 L 461 202 L 461 297 L 509 345 L 477 394 L 466 384 L 463 388 L 463 669 L 663 670 L 682 706 L 707 727 L 409 728 L 406 625 L 123 737 Z M 484 402 L 542 318 L 547 289 L 547 277 L 498 226 L 521 221 L 559 223 L 591 235 L 612 250 L 631 273 L 640 302 L 607 360 L 564 333 L 527 382 L 526 388 L 562 413 L 552 429 L 547 431 Z M 557 438 L 570 420 L 583 421 L 613 380 L 612 368 L 628 350 L 631 396 L 644 435 L 777 654 L 781 673 L 779 688 L 765 710 L 749 719 L 730 721 L 711 715 L 696 702 L 579 467 Z M 700 659 L 704 682 L 722 695 L 734 696 L 748 691 L 760 673 L 760 658 L 755 647 L 738 636 L 715 639 L 707 645 Z M 562 353 L 571 348 L 602 372 L 593 377 Z M 471 538 L 479 531 L 575 493 L 602 549 L 473 597 Z M 601 457 L 612 448 L 625 453 L 718 608 L 684 626 L 601 464 Z M 551 368 L 559 363 L 588 383 L 590 389 L 581 392 L 551 372 Z" fill="url(#face)" fill-rule="evenodd" clip-rule="evenodd" filter="url(#shadow)"/>
+</svg>

@@ -297,6 +297,9 @@ export const onServiceOrderWritten = onDocumentWritten(
     const after = event.data?.after?.data() as any;
     if (!after) return;
     const before = event.data?.before?.data() as any;
+    // Escrituras del migrador (seed/migrate-prod-to-service-orders.mjs) no disparan efectos:
+    // cada corrida estampa un `migration.runId` nuevo; si cambió en esta escritura, es la migración.
+    if (after.migration?.runId && after.migration.runId !== before?.migration?.runId) return;
     const tid = event.params.tid;
     const soId = event.params.id;
     const ref = event.data!.after!.ref;

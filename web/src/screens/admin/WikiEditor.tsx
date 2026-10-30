@@ -2,6 +2,7 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { compressImage } from '../../lib/compressImage';
 import { storage } from '../../lib/firebase';
 import { Icon, Button, Field, Input, Select, Textarea, EmptyState, toast } from '../../components/ui';
 import { PageHeader } from './AdminShell';
@@ -57,15 +58,20 @@ function WikiEditorForm({ ctx, editing, existing, wiki }: { ctx: AppCtx; editing
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const onUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = e.target.files?.[0];
     e.target.value = '';
-    if (!file) return;
-    const evType: EvidenceType = file.type.startsWith('video/') ? 'video' : file.type === 'application/pdf' ? 'pdf' : 'image';
+    if (!picked) return;
+    const evType: EvidenceType = picked.type.startsWith('video/') ? 'video' : picked.type === 'application/pdf' ? 'pdf' : 'image';
+    // Fotos: comprimidas en el navegador; videos de la Wiki: los comprime onEvidenceFinalized.
+    const file = evType === 'image' ? await compressImage(picked) : picked;
     const fileId = Math.random().toString(36).slice(2);
     const path = `tenants/${tid}/wiki/${pageId}/${fileId}-${file.name.replace(/[^\w.\-]/g, '_')}`;
     setUploading(true);
-    const task = uploadBytesResumable(storageRef(storage, path), file, { contentType: file.type });
+    const task = uploadBytesResumable(storageRef(storage, path), file, {
+      contentType: file.type,
+      customMetadata: evType === 'video' ? { wikiPageId: pageId, attachmentId: fileId } : undefined,
+    });
     task.on(
       'state_changed',
       undefined,

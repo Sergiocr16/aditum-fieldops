@@ -173,13 +173,14 @@ export default function ServiceOrderDetail({ ctx, id }: { ctx: AppCtx; id: strin
 
       <div className="detail-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {isDemand && (so.description || so.instructions || so.expected || so.doneConditions) && (
+          {isDemand && (so.description || so.instructions || so.expected || so.doneConditions || so.evidenceReq) && (
             <div className="card card-pad">
               <div className="section-label" style={{ marginBottom: 10 }}>{t('serviceOrders.briefing')}</div>
               {so.description && <p style={{ margin: '0 0 8px', fontSize: 13.5, lineHeight: 1.6 }}>{so.description}</p>}
               {so.instructions && <InfoRow label={t('ticketDetail.instructions')} value={so.instructions} />}
               {so.expected && <InfoRow label={t('ticketDetail.expected')} value={so.expected} />}
               {so.doneConditions && <InfoRow label={t('ticketDetail.doneConditions')} value={so.doneConditions} />}
+              {so.evidenceReq && <InfoRow label={t('ticketDetail.evidenceReq')} value={so.evidenceReq} />}
             </div>
           )}
 
@@ -249,6 +250,37 @@ export default function ServiceOrderDetail({ ctx, id }: { ctx: AppCtx; id: strin
             <div className="card card-pad">
               <div className="section-label" style={{ marginBottom: 10 }}>{t('serviceOrders.observations')}</div>
               <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6 }}>{so.observations}</p>
+            </div>
+          )}
+
+          {so.techObs && (
+            <div className="card card-pad">
+              <div className="section-label" style={{ marginBottom: 10 }}>{t('ticketDetail.techObs')}</div>
+              <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{so.techObs}</p>
+            </div>
+          )}
+
+          {/* Comentarios internos + aprobación (incluye los de órdenes migradas desde OT). No van al reporte público. */}
+          {((so.comments || []).length > 0 || so.approval) && (
+            <div className="card card-pad">
+              <div className="section-label" style={{ marginBottom: 12 }}>{t('ticketDetail.comments')}</div>
+              {so.approval && (
+                <div style={{ display: 'flex', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                  <Icon name="checkCircle" size={15} style={{ color: 'var(--st-apro-fg)', marginTop: 2 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{t('ticketDetail.approved')}{so.approval.comment ? ` · ${so.approval.comment}` : ''}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-3)' }} className="mono">{so.approval.at} · {so.approval.by}</div>
+                  </div>
+                </div>
+              )}
+              {[...(so.comments || [])].reverse().map((c: any, i: number) => (
+                <div key={i} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{c.text}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-3)' }} className="mono">
+                    {c.type ? t('comments.' + c.type, { defaultValue: c.type }) + ' · ' : ''}{c.at} · {c.by}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { compressImage, extOf } from '../../lib/compressImage';
 import { storage } from '../../lib/firebase';
 import { useTenant } from '../../lib/tenant';
 import { tenantHasFeature } from '../../lib/modules';
@@ -85,15 +86,17 @@ export default function MobileServiceOrder({ ctx, id }: { ctx: AppCtx; id: strin
 
   // Orden por demanda: subir evidencia libre (foto/video/pdf) a evidence[], asociada a una visita
   const onEvidence = async (e: React.ChangeEvent<HTMLInputElement>, visitId: string | null = null) => {
-    const file = e.target.files?.[0];
+    const picked = e.target.files?.[0];
     e.target.value = '';
-    if (!file) return;
-    if (file.size > 200 * 1024 * 1024) { toast('> 200MB', 'error'); return; }
+    if (!picked) return;
     setUploadingItem(visitId || 'general');
     try {
+      const type = picked.type.startsWith('video/') ? 'video' : picked.type === 'application/pdf' ? 'pdf' : 'image';
+      // Fotos: se comprimen en el dispositivo; videos: en el backend (onEvidenceFinalized).
+      const file = type === 'image' ? await compressImage(picked) : picked;
+      if (file.size > 200 * 1024 * 1024) { toast('> 200MB', 'error'); return; }
       const eid = 'e' + Math.random().toString(36).slice(2, 9);
-      const type = file.type.startsWith('video/') ? 'video' : file.type === 'application/pdf' ? 'pdf' : 'image';
-      const p = `tenants/${tid}/serviceOrders/${so.id}/ev-${eid}.${file.name.split('.').pop() || 'jpg'}`;
+      const p = `tenants/${tid}/serviceOrders/${so.id}/ev-${eid}.${extOf(file)}`;
       const snap = await uploadBytes(storageRef(storage, p), file, { contentType: file.type, customMetadata: { serviceOrderId: so.id, evidenceId: eid } as any });
       const url = await getDownloadURL(snap.ref);
       const item = { id: eid, path: p, file: url, type, name: file.name, size: file.size, desc: '', by: ctx.admin.name, date: now(), status: type === 'video' ? 'processing' : 'ready', visitId };
@@ -205,14 +208,15 @@ export default function MobileServiceOrder({ ctx, id }: { ctx: AppCtx; id: strin
     return { path, url: await getDownloadURL(snap.ref) };
   };
 
-  const onItemPhoto = async (equipmentId: string, itemId: string, file: File) => {
-    if (file.size > 20 * 1024 * 1024) {
-      toast('> 20MB', 'error');
-      return;
-    }
+  const onItemPhoto = async (equipmentId: string, itemId: string, picked: File) => {
     setUploadingItem(itemId);
     try {
-      const p = `tenants/${tid}/serviceOrders/${so.id}/check-${itemId}-${Date.now()}.${file.name.split('.').pop() || 'jpg'}`;
+      const file = await compressImage(picked);
+      if (file.size > 20 * 1024 * 1024) {
+        toast('> 20MB', 'error');
+        return;
+      }
+      const p = `tenants/${tid}/serviceOrders/${so.id}/check-${itemId}-${Date.now()}.${extOf(file)}`;
       const up = await uploadImage(p, file);
       await updateEqChecklist(equipmentId, itemId, { photoPath: up.path, photoUrl: up.url, at: now(), by: ctx.admin.name });
       toast(t('mobile.photoUploaded'), 'success');
@@ -224,17 +228,18 @@ export default function MobileServiceOrder({ ctx, id }: { ctx: AppCtx; id: strin
   };
 
   const onGeneralPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const picked = e.target.files?.[0];
     e.target.value = '';
-    if (!file) return;
-    if (file.size > 20 * 1024 * 1024) {
-      toast('> 20MB', 'error');
-      return;
-    }
+    if (!picked) return;
     setUploadingItem('general');
     try {
+      const file = await compressImage(picked);
+      if (file.size > 20 * 1024 * 1024) {
+        toast('> 20MB', 'error');
+        return;
+      }
       const pid = Math.random().toString(36).slice(2, 9);
-      const p = `tenants/${tid}/serviceOrders/${so.id}/photo-${pid}.${file.name.split('.').pop() || 'jpg'}`;
+      const p = `tenants/${tid}/serviceOrders/${so.id}/photo-${pid}.${extOf(file)}`;
       const up = await uploadImage(p, file);
       await actions.update(so.id, { photos: [...(so.photos || []), { id: pid, path: up.path, url: up.url, desc: '', at: now(), by: ctx.admin.name }] } as any);
       toast(t('mobile.photoUploaded'), 'success');
@@ -359,6 +364,34 @@ export default function MobileServiceOrder({ ctx, id }: { ctx: AppCtx; id: strin
             {t('mobile.uploading')}
           </div>
         )}
+
+        {isDemand && (() => {
+          // Evidencia sin visita asociada (p. ej. la de órdenes migradas desde las OT viejas).
+          const loose = ((so.evidence as any[]) || []).filter((e) => !e.visitId);
+          if (!loose.length) return null;
+          return (
+            <div className="card" style={{ padding: '14px 15px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <Icon name="camera" size={16} style={{ color: 'var(--text-3)' }} />
+                <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.02em' }}>{t('serviceOrders.evidence')}</span>
+              </div>
+              <div className="evidence-grid">
+                {loose.map((ev) => (
+                  <div key={ev.id} onClick={() => window.open(ev.file, '_blank')}>
+                    {ev.type === 'image' ? (
+                      <img src={ev.file} style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 9 }} />
+                    ) : (
+                      <div style={{ width: '100%', height: 100, borderRadius: 9, background: 'var(--navy-900)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 4 }}>
+                        <Icon name={ev.type === 'video' ? 'play' : 'file'} size={22} />
+                        <span style={{ fontSize: 10.5 }}>{String(ev.type || '').toUpperCase()}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {isDemand && (editable || visits.length > 0) && (
           <div className="card" style={{ overflow: 'hidden', ...(editable ? { borderColor: 'var(--gold)', borderWidth: 1.5 } : {}) }}>

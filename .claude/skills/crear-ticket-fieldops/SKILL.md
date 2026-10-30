@@ -7,6 +7,11 @@ description: Crea un ticket de Aditum Service en producción a partir de una des
 
 Objetivo: crear un ticket completo conversando, **preguntando solo lo que falte**, sin llenar formularios.
 
+> Desde el modelo unificado, `create_ticket` crea una **orden de servicio por demanda** (`serviceOrders`,
+> `mode: 'demanda'`, estado inicial `PROGRAMADA`) — es lo que la web muestra en *Órdenes*. El número sigue
+> la secuencia del tenant (AD-#### en Aditum). Los tools `get/assign/approve/reject/close_ticket`,
+> `add_ticket_visit`, `add_ticket_comment` y `list_tickets` operan sobre esas órdenes (incluidas las OT migradas).
+
 ## Campos del ticket (parámetros del tool MCP `create_ticket`)
 
 | Campo | Qué es | Obligatorio |
@@ -17,8 +22,9 @@ Objetivo: crear un ticket completo conversando, **preguntando solo lo que falte*
 | `address` | Dirección o referencia | recomendado |
 | `priority` | `baja` · `media` · `alta` · `urgente` | recomendado (def. media) |
 | `technician` | Nombre/correo del técnico a asignar | opcional |
-| `scheduled` | Fecha programada `YYYY-MM-DD` | recomendado |
-| `deadline` | Fecha límite `YYYY-MM-DD` | opcional |
+| `scheduled` | Fecha programada `YYYY-MM-DD` (def. hoy) | recomendado |
+| `scheduledTime` | Hora `HH:mm` (def. 08:00) | opcional |
+| `deadline` | Fecha límite `YYYY-MM-DD` (queda en las notas de la orden) | opcional |
 | `description` | **Qué hacer** (descripción del trabajo) | recomendado |
 | `instructions` | Instrucciones paso a paso | opcional |
 | `expected` | **Qué verificar** / resultado esperado | recomendado |
@@ -26,6 +32,7 @@ Objetivo: crear un ticket completo conversando, **preguntando solo lo que falte*
 | `observations` | Observaciones / coordinación | opcional |
 | `evidenceReq` | **Qué grabar o fotografiar** (evidencia requerida) | recomendado |
 | `checklist` | Lista de verificación (array de textos) | recomendado |
+| `requiresInvoice` | ¿Se factura al aprobar? | opcional (def. no) |
 
 ## Flujo
 
@@ -45,7 +52,7 @@ Objetivo: crear un ticket completo conversando, **preguntando solo lo que falte*
 5. **Proponé automáticamente** un `evidenceReq` y un `checklist` según el tipo de trabajo, y mostralos para
    que el usuario los ajuste o confirme (no los des por hechos sin mostrarlos).
 6. **Resumen + confirmación:** mostrá todos los campos que vas a enviar y pedí "¿lo creo?".
-7. Al confirmar, llamá **`create_ticket`** con los campos. Reportá el **N° (AD-####)** y a quién quedó
+7. Al confirmar, llamá **`create_ticket`** con los campos. Reportá el **N° de la orden (AD-####)** y a quién quedó
    asignado. Si quedó sin técnico, ofrecé asignarlo con `assign_ticket`.
 
 ## Reglas

@@ -376,7 +376,15 @@ export const rescheduleServiceOrder = onCall({ secrets: [SMTP_USER, SMTP_PASS] }
 });
 
 export const getPublicServiceReport = onCall(async (req) => {
-  const tk = await resolvePublicToken(req.data?.token, 'so_report');
+  // so_report = link nativo de la orden. ticket_share = link viejo de una OT (/p/:token): la OT se
+  // migró a serviceOrders con el MISMO id, así que el link muestra la orden de servicio en vivo.
+  let tk;
+  try {
+    tk = await resolvePublicToken(req.data?.token, 'so_report');
+  } catch (e: any) {
+    if (e?.details?.reason !== 'notfound') throw e;
+    tk = await resolvePublicToken(req.data?.token, 'ticket_share');
+  }
   const snap = await tcol(tk.tenantId, 'serviceOrders').doc(tk.targetId).get();
   if (!snap.exists) throw new HttpsError('not-found', 'Not found', { reason: 'notfound' });
   const so = snap.data() as any;
@@ -435,6 +443,14 @@ export const getPublicServiceReport = onCall(async (req) => {
       // Trabajo por día (demanda): visitas saneadas para el desglose público.
       visits: (so.visits || []).map((v: any) => ({ id: v.id, date: v.date, techName: v.techName || '', note: v.note || '', minutes: visitWorkedMinutes(v) })),
       observations: so.observations || '',
+      // Demanda (ex OT): lo mismo que mostraba el link público viejo /p/ — instrucciones, resultado
+      // esperado, lo que hizo el técnico y la aprobación. Solo campos de cara al cliente.
+      instructions: so.mode === 'demanda' ? so.instructions || '' : '',
+      expected: so.mode === 'demanda' ? so.expected || '' : '',
+      techNote: so.mode === 'demanda' ? so.techNote || '' : '',
+      techObs: so.mode === 'demanda' ? (so.techObs && so.techObs !== so.techNote ? so.techObs : '') : '',
+      readyAt: so.readyAt || null,
+      approval: so.mode === 'demanda' && so.approval ? { at: so.approval.at || null, by: so.approval.by || '', comment: so.approval.comment || '' } : null,
       // Cédula enmascarada en el reporte público (PII): solo se muestran los últimos 4.
       signature: so.signature ? { name: so.signature.name, idNumber: maskId(so.signature.idNumber), url: so.signature.url, at: so.signature.at } : null,
     },

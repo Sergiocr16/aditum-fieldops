@@ -1,3 +1,6 @@
+/* ⚠ PRODUCCIÓN: NO usar este script. Usar seed/migrate-prod-to-service-orders.mjs, que hace este paso
+   con respaldo previo, sin sobrescribir datos existentes, sin disparar correos/inventario (guardas de
+   migración en los triggers) y re-apuntando los links públicos /p/ a la orden de servicio. */
 /* © 2026 Aditum — Aditum FieldOps — migración single-tenant → multi-tenant.
    Mueve los datos top-level al tenant inicial (subcolecciones tenants/{tid}/...),
    agrega tenantId a users y claims, y crea publicTokens para los share.token

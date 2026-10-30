@@ -143,7 +143,8 @@ export function StatusBadge({ status, size }: any) {
 export function SOStatusBadge({ status, size }: any) {
   const { t } = useTranslation();
   const s = SO_STATUS[status as keyof typeof SO_STATUS];
-  if (!s) return null;
+  // Historial de órdenes migradas desde OT: estados viejos (pendiente, aprobado...) → badge legacy.
+  if (!s) return <StatusBadge status={status} size={size} />;
   return (
     <span className={'badge ' + (size || '') + ' bg-' + s.cls}>
       <span className="dot" />

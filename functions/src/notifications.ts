@@ -137,7 +137,7 @@ export function layout(opts: { heading: string; intro: string; ticket?: any; ext
   const headerBg = shade(brand.primary, -0.25);
   const wordmark = brand.logoUrl
     ? `<img src="${encodeURI(brand.logoUrl)}" alt="${esc(brand.appName)}" style="height:26px;width:auto;max-width:200px;display:inline-block;vertical-align:middle"/>`
-    : esc(brand.appName);
+    : `<img src="${APP_URL}/service-icon.png" alt="" width="26" height="26" style="width:26px;height:26px;border-radius:6px;display:inline-block;vertical-align:middle;margin-right:9px"/><span style="vertical-align:middle">${esc(brand.appName)}</span>`;
   const btnUrl = encodeURI(opts.buttonUrl || APP_URL);
   const btnLabel = opts.buttonLabel || `Ver en ${brand.appName}`;
   const row = (label: string, value: any) =>

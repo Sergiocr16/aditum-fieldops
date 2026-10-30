@@ -74,6 +74,16 @@ npx firebase-tools@13 deploy --project fieldops-aditum --non-interactive
 npm --prefix mcp run build                       # se usa vía .mcp.json (server "fieldops-aditum")
 ```
 
+### Migración de producción (modelo viejo → órdenes de servicio)
+- Script único: `seed/migrate-prod-to-service-orders.mjs` (`--dry-run`, `--verify-only`). Hace respaldo JSON
+  en `secrets/backups/`, copia todo a `tenants/aditum/...`, convierte cada ticket en orden **por demanda** con el
+  mismo id y número, re-apunta los links `/p/:token` a la orden y no borra nada. NO usar
+  `migrate-to-tenants.mjs` / `migrate-tickets-to-orders.mjs` contra producción.
+- Las escrituras del migrador llevan `migration.runId`; `onServiceOrderWritten`/`onTicketWritten` las ignoran
+  (sin correos ni rebaja de inventario).
+- Compresión: fotos en el cliente (`web/src/lib/compressImage.ts`, 1920px JPEG q0.8); videos en
+  `onEvidenceFinalized` (720p H.264, **en el mismo path conservando el token** → la URL no cambia).
+
 ### Gotchas de deploy (importante)
 - **`shared` está vendorizado** en `functions/src/shared.ts` (Firebase no sube deps `file:` externas). Si
   cambiás `shared/src/index.ts`, recopiá: `cp shared/src/index.ts functions/src/shared.ts`.

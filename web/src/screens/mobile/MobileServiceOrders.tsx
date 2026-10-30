@@ -62,7 +62,7 @@ export default function MobileServiceOrders({ ctx }: { ctx: AppCtx }) {
     { key: 'today', label: t('mobileOrders.tabToday'), f: (o: ServiceOrder) => ACTIVE.includes(o.status) && o.scheduledDate <= d },
     { key: 'week', label: t('mobileOrders.tabWeek'), f: (o: ServiceOrder) => ACTIVE.includes(o.status) && o.scheduledDate > d && o.scheduledDate <= week },
     { key: 'upcoming', label: t('mobileOrders.tabUpcoming'), f: (o: ServiceOrder) => ACTIVE.includes(o.status) && o.scheduledDate > week },
-    { key: 'done', label: t('mobileOrders.tabDone'), f: (o: ServiceOrder) => ['SERVICIO_TERMINADO', 'PENDIENTE_FACTURAR', 'FACTURADA'].includes(o.status) },
+    { key: 'done', label: t('mobileOrders.tabDone'), f: (o: ServiceOrder) => ['SERVICIO_TERMINADO', 'EN_REVISION', 'PENDIENTE_FACTURAR', 'FACTURADA', 'CERRADA'].includes(o.status) },
   ];
   const [tab, setTab] = useState('today');
   const active = tabs.find((x) => x.key === tab)!;
