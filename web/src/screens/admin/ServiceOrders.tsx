@@ -282,7 +282,7 @@ export default function ServiceOrders({ ctx }: { ctx: AppCtx }) {
         }
       />
 
-      <div className="card" style={{ marginBottom: 16, padding: '12px 16px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="card filter-bar" style={{ marginBottom: 16, padding: '12px 16px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ flex: '1 1 200px' }}>
           <Input icon="search" placeholder={t('serviceOrders.searchPh')} value={search} onChange={(e: any) => setSearch(e.target.value)} />
         </div>
@@ -298,7 +298,7 @@ export default function ServiceOrders({ ctx }: { ctx: AppCtx }) {
             {ctx.db.technicians.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
           </Select>
         </div>
-        <div style={{ width: 160 }}>
+        <div style={{ width: 200 }}>
           <Select value={fMode} onChange={(e: any) => setFMode(e.target.value)}>
             <option value="">{t('serviceOrders.allModes')}</option>
             <option value="periodico">{t('serviceOrders.mode_periodico')}</option>

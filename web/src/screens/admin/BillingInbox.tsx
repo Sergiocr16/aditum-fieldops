@@ -158,7 +158,7 @@ export default function BillingInbox({ ctx }: { ctx: AppCtx }) {
         }
       />
 
-      <div className="card" style={{ marginBottom: 16, padding: '12px 16px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="card filter-bar" style={{ marginBottom: 16, padding: '12px 16px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
         <div className="seg" role="tablist">
           {(['pendiente', 'facturas', 'facturado'] as const).map((k) => (
             <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => { setTab(k); setSelected(new Set()); }}>

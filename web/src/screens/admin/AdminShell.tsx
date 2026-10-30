@@ -11,7 +11,7 @@ import type { AppCtx } from '../../lib/ctx';
 export function PageHeader({ title, sub, action, back }: any) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
         {back && (
           <button className="icon-btn" onClick={back} style={{ width: 38, height: 38 }}>
             <Icon name="arrowLeft" size={18} />
@@ -22,7 +22,7 @@ export function PageHeader({ title, sub, action, back }: any) {
           {sub && <p style={{ margin: '3px 0 0', fontSize: 13.5, color: 'var(--text-2)' }}>{sub}</p>}
         </div>
       </div>
-      {action && <div style={{ display: 'flex', gap: 10 }}>{action}</div>}
+      {action && <div className="page-head-actions" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{action}</div>}
     </div>
   );
 }

@@ -63,8 +63,8 @@ export default function ServiceCalendar({ ctx }: { ctx: AppCtx }) {
         }
       />
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, textTransform: 'capitalize' }}>{monthLabel(month, i18n.language)}</h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px 16px', flexWrap: 'wrap', marginBottom: 12 }}>
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{monthLabel(month, i18n.language)}</h2>
         <div style={{ display: 'flex', gap: 12, fontSize: 11.5, color: 'var(--text-3)', flexWrap: 'wrap' }}>
           {(['PROGRAMADA', 'CONFIRMADA', 'EN_PROGRESO', 'PENDIENTE_FACTURAR'] as const).map((s) => (
             <span key={s} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -76,19 +76,19 @@ export default function ServiceCalendar({ ctx }: { ctx: AppCtx }) {
       </div>
 
       <div className="card" style={{ overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', borderBottom: '1px solid var(--border)' }}>
           {dows.map((d) => (
-            <div key={d} style={{ padding: '8px 10px', fontSize: 11.5, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>{d}</div>
+            <div key={d} className="cal-dow" style={{ padding: '8px 10px', fontSize: 11.5, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>{d}</div>
           ))}
         </div>
         {weeks.map((week, wi) => (
-          <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: wi < weeks.length - 1 ? '1px solid var(--border)' : 'none' }}>
+          <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', borderBottom: wi < weeks.length - 1 ? '1px solid var(--border)' : 'none' }}>
             {week.map((date) => {
               const inMonth = monthOf(date) === month;
               const isToday = date === today();
               const list = byDate.get(date) || [];
               return (
-                <div key={date} style={{ minHeight: 96, padding: '6px 7px', borderRight: '1px solid var(--border)', background: inMonth ? 'var(--surface)' : 'var(--bg)', opacity: inMonth ? 1 : 0.55 }}>
+                <div key={date} className="cal-cell" style={{ minHeight: 96, padding: '6px 7px', borderRight: '1px solid var(--border)', background: inMonth ? 'var(--surface)' : 'var(--bg)', opacity: inMonth ? 1 : 0.55 }}>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
                     <span className="mono" style={{
                       fontSize: 12, fontWeight: isToday ? 800 : 500,
@@ -100,6 +100,7 @@ export default function ServiceCalendar({ ctx }: { ctx: AppCtx }) {
                   {list.slice(0, 3).map((o) => (
                     <button
                       key={o.id}
+                      className="cal-ev"
                       onClick={() => setSelected(o)}
                       title={`${o.num} · ${o.client?.name}`}
                       style={{
@@ -109,8 +110,8 @@ export default function ServiceCalendar({ ctx }: { ctx: AppCtx }) {
                       }}
                     >
                       <span style={{ width: 7, height: 7, borderRadius: 99, flex: 'none', background: DOT[SO_STATUS[o.status]?.cls || 'pend'] }} />
-                      <span className="mono" style={{ fontWeight: 700, flex: 'none' }}>{o.scheduledTime}</span>
-                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-2)' }}>
+                      <span className="mono cal-ev-time" style={{ fontWeight: 700, flex: 'none' }}>{o.scheduledTime}</span>
+                      <span className="cal-ev-label" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-2)' }}>
                         {o.equipmentSnapshot?.typeName || o.num}
                       </span>
                     </button>

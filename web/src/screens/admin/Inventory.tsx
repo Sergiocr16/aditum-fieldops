@@ -131,9 +131,9 @@ export default function Inventory({ ctx }: { ctx: AppCtx }) {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+      <div className="seg" role="tablist" style={{ marginBottom: 14 }}>
         {(['products', 'history'] as const).map((tb) => (
-          <button key={tb} onClick={() => setTab(tb)} className={'m-chip' + (tab === tb ? ' active' : '')}>
+          <button key={tb} role="tab" aria-selected={tab === tb} onClick={() => setTab(tb)} className={tab === tb ? 'on' : ''}>
             {tb === 'products' ? t('inventory.tabProducts') : t('inventory.tabHistory')}
           </button>
         ))}
