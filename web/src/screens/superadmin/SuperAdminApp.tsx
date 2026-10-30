@@ -232,9 +232,9 @@ function TenantDetail({ tenant, onBack }: { tenant: Tenant; onBack: () => void }
         <StatusDot ok={tenant.smtpStatus === 'verified'} label={'SMTP: ' + t('superadmin.smtp_' + (tenant.smtpStatus || 'unset'))} />
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      <div className="seg" role="tablist" style={{ marginBottom: 16 }}>
         {tabs.map((x) => (
-          <button key={x.key} className={'chip' + (tab === x.key ? ' chip-active' : '')} onClick={() => setTab(x.key)} style={tab === x.key ? { background: 'var(--navy-800)', color: '#fff', cursor: 'pointer' } : { cursor: 'pointer' }}>
+          <button key={x.key} role="tab" aria-selected={tab === x.key} className={tab === x.key ? 'on' : ''} onClick={() => setTab(x.key)}>
             {x.label}
           </button>
         ))}

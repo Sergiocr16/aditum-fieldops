@@ -16,7 +16,7 @@ import type { Equipment } from '../../lib/types';
 
 function InfoRow({ label, value, mono }: { label: string; value?: string | null; mono?: boolean }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+    <div className="info-row" style={{ display: 'flex', justifyContent: 'space-between', gap: 14, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
       <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{label}</span>
       <span className={mono ? 'mono' : ''} style={{ fontSize: 13, fontWeight: 600, textAlign: 'right' }}>{value || '—'}</span>
     </div>

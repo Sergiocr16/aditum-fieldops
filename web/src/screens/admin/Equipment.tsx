@@ -288,7 +288,7 @@ export default function EquipmentScreen({ ctx }: { ctx: AppCtx }) {
         }
       />
 
-      <div className="card" style={{ marginBottom: 16, padding: '12px 16px', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+      <div className="card filter-bar" style={{ marginBottom: 16, padding: '12px 16px', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 220px' }}>
           <Input icon="search" placeholder={t('equipment.searchPh')} value={search} onChange={(e: any) => setSearch(e.target.value)} />
         </div>

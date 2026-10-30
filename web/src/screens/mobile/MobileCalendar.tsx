@@ -54,7 +54,7 @@ export default function MobileCalendar({ ctx }: { ctx: AppCtx }) {
           <button className="icon-btn" style={{ width: 36, height: 36 }} onClick={() => setMonth(addMonths(month, -1))} aria-label="prev">
             <Icon name="chevronLeft" size={17} />
           </button>
-          <div style={{ flex: 1, textAlign: 'center', fontSize: 16, fontWeight: 700, textTransform: 'capitalize' }}>{monthLabel(month, i18n.language)}</div>
+          <div style={{ flex: 1, textAlign: 'center', fontSize: 16, fontWeight: 700 }}>{monthLabel(month, i18n.language)}</div>
           <button className="icon-btn" style={{ width: 36, height: 36 }} onClick={() => setMonth(addMonths(month, 1))} aria-label="next">
             <Icon name="chevronRight" size={17} />
           </button>
@@ -129,7 +129,7 @@ export default function MobileCalendar({ ctx }: { ctx: AppCtx }) {
 
         {/* Detalle del día seleccionado */}
         <div>
-          <div className="section-label" style={{ marginBottom: 10, textTransform: 'capitalize' }}>
+          <div className="section-label" style={{ marginBottom: 10 }}>
             {new Date(Date.UTC(+sel.slice(0, 4), +sel.slice(5, 7) - 1, +sel.slice(8))).toLocaleDateString(i18n.language === 'en' ? 'en-US' : 'es-CR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })}
           </div>
           {selItems.length ? (

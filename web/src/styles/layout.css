@@ -259,5 +259,30 @@ html,body,#root{height:100%;}
   .evidence-grid{grid-template-columns:repeat(2,1fr);}
   .public-summary{grid-template-columns:1fr 1fr;}
   .content{padding:18px 14px;}
+  /* Tablas: en móvil no se aplastan columnas; scroll horizontal dentro de su card. `.fit` = tabla corta que cabe. */
+  .card:has(> .data-table){overflow-x:auto!important;}
+  .data-table:not(.fit){min-width:620px;}
+  .data-table thead th{white-space:nowrap;}
+  /* Cabecera de pantalla: acciones bajan y ocupan el ancho; los botones hacen wrap. */
+  .page-head-actions{width:100%;flex-wrap:wrap;}
+  /* Filas etiqueta/valor: apiladas, texto alineado a la izquierda. */
+  .info-row{flex-direction:column;gap:3px!important;}
+  .info-row > :last-child{text-align:left!important;}
+  /* Calendario admin: celdas compactas, eventos solo como punto + hora. */
+  .cal-cell{min-height:58px!important;padding:4px!important;}
+  .cal-ev{padding:2px 3px!important;justify-content:center;}
+  .cal-ev-label{display:none;}
+  .cal-ev-time{font-size:9.5px;}
+  .cal-dow{padding:6px 2px!important;text-align:center;font-size:10px!important;}
+  /* Control segmentado: nunca más ancho que la pantalla. */
+  .seg{max-width:100%;overflow-x:auto;scrollbar-width:none;}
+  .seg button{white-space:nowrap;flex:none;}
+  /* Barra de filtros: los campos se reparten el ancho en vez de anchos fijos; la flecha de rango se oculta. */
+  .filter-bar > *{flex:1 1 150px!important;width:auto!important;min-width:0;}
+  .filter-bar > span{display:none;}
+  .filter-bar > :has(> .input-ico){flex-basis:100%!important;}
+  .filter-bar > .seg{flex:0 1 auto!important;margin-left:0!important;}
 }
+/* Celdas mono (números de orden, fechas, montos) no se parten en varias líneas. */
+.data-table td.mono{white-space:nowrap;}
 @media (max-width:520px){ .metric-grid{grid-template-columns:1fr 1fr;} .public-summary{grid-template-columns:1fr;} }

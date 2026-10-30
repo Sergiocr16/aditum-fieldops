@@ -45,7 +45,9 @@ export function monthMatrix(yyyymm: string): string[][] {
 
 export function monthLabel(yyyymm: string, lang: string): string {
   const [y, m] = yyyymm.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-CR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const s = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-CR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  // Solo la primera letra en mayúscula ("Octubre de 2026", no "Octubre De 2026").
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 export function weekdayShort(lang: string): string[] {

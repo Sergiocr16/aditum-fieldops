@@ -79,7 +79,7 @@ export default function HoursReport({ ctx }: { ctx: AppCtx }) {
     <div className="fade-in">
       <PageHeader title={t('hoursReport.title')} sub={t('hoursReport.sub')} />
 
-      <div className="card" style={{ marginBottom: 16, padding: '12px 16px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="card filter-bar" style={{ marginBottom: 16, padding: '12px 16px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
         <Input type="date" value={from} onChange={(e: any) => setFrom(e.target.value)} style={{ width: 150 }} />
         <span style={{ color: 'var(--text-3)' }}>→</span>
         <Input type="date" value={to} onChange={(e: any) => setTo(e.target.value)} style={{ width: 150 }} />
